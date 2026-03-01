@@ -13,8 +13,17 @@ import {
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 
 // --- Firebase Configuration ---
-// ปรับปรุงตามภาพที่ 2 เพื่อให้ใช้งานในระบบของคุณได้
-const firebaseConfig = JSON.parse(__firebase_config);
+// ข้อมูลโปรเจกต์ nubcal-cbd69 ของคุณ
+const firebaseConfig = {
+  apiKey: "AIzaSyCKSPlMznK713bLuSyR3b7Kj1BJcCuQeJI",
+  authDomain: "nubcal-cbd69.firebaseapp.com",
+  projectId: "nubcal-cbd69",
+  storageBucket: "nubcal-cbd69.firebasestorage.app",
+  messagingSenderId: "44640039163",
+  appId: "1:44640039163:web:6ae6d2573f26e08ee4805e",
+  measurementId: "G-4EHW3MLZ4G"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -59,11 +68,11 @@ export default function App() {
   const [isChatting, setIsChatting] = useState(false);
 
   const fileInputRef = useRef(null);
-  const apiKey = ""; 
+  const apiKey = ""; // Gemini API Key จะถูกจัดการโดยสภาพแวดล้อมอัตโนมัติ
 
   // --- ระบบยืนยันตัวตนและการตั้งค่าเริ่มต้น ---
   useEffect(() => {
-    // ฉีดฟอนต์ Kanit ตามภาพที่ 3 เพื่อความมินิมอล
+    // ฉีดฟอนต์ Kanit เพื่อความมินิมอล
     const fontLink = document.createElement('link');
     fontLink.href = "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap";
     fontLink.rel = "stylesheet";
@@ -71,12 +80,22 @@ export default function App() {
 
     const initAuth = async () => {
       try {
+        // แก้ไขข้อผิดพลาด custom-token-mismatch
+        // หากมี __initial_auth_token ให้ลองใช้ก่อน แต่ถ้าไม่ตรงกับ config ให้ใช้ Anonymous แทน
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          try {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (tokenErr) {
+            console.warn("Custom token mismatch, falling back to anonymous sign-in.");
+            await signInAnonymously(auth);
+          }
         } else {
           await signInAnonymously(auth);
         }
-      } catch (err) { console.error("Auth error:", err); }
+      } catch (err) { 
+        console.error("Auth error:", err);
+        setError("ไม่สามารถเชื่อมต่อกับระบบสมาชิกได้ โปรดตรวจสอบการตั้งค่า Firebase ของคุณ");
+      }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -115,7 +134,7 @@ export default function App() {
         return d.toDateString() === today;
       });
       setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
-    });
+    }, (err) => console.error("Snapshot error:", err));
 
     const todayStr = new Date().toLocaleDateString('en-CA'); 
     const waterRef = doc(db, 'artifacts', appId, 'users', user.uid, 'water', todayStr);
@@ -140,6 +159,7 @@ export default function App() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!user) return;
     const stats = calculateStats(formData);
     const newProfile = { ...formData, ...stats };
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'profile'), newProfile);
@@ -149,6 +169,7 @@ export default function App() {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    if (!user) return;
     const stats = calculateStats(formData);
     const newProfile = { ...formData, ...stats };
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'profile'), newProfile);
@@ -157,6 +178,7 @@ export default function App() {
   };
 
   const handleAddWater = async (amount) => {
+    if (!user) return;
     const todayStr = new Date().toLocaleDateString('en-CA');
     const newAmount = Math.max(0, waterIntake + amount);
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'water', todayStr), { amount: newAmount }, { merge: true });
@@ -317,6 +339,13 @@ export default function App() {
       </header>
 
       <main className="px-6 mt-6 relative z-10">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm flex items-start gap-2">
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {view === 'home' && (
           <div className="space-y-6">
             <div className="bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 p-3 shadow-sm flex items-center space-x-3">
@@ -359,7 +388,7 @@ export default function App() {
                   dailyLog.map(m => (
                     <div key={m.id} className="bg-white/60 p-4 rounded-2xl border border-white/80 flex items-center justify-between shadow-sm">
                       <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs">{m.mealType?.[0]}</div>
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs shadow-sm">{m.mealType?.[0]}</div>
                         <div><p className="font-bold text-sm">{m.food_name}</p><p className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">{m.mealType} • {m.calories} kcal</p></div>
                       </div>
                     </div>
@@ -444,7 +473,7 @@ export default function App() {
 
         {view === 'profile' && (
           <div className="space-y-6">
-            <div className="bg-white/60 backdrop-blur-xl rounded-[36px] border border-white/80 p-8 shadow-sm">
+            <div className="bg-white/60 backdrop-blur-xl rounded-[36px] border border-white/60 p-8 shadow-sm">
               <h3 className="font-bold text-slate-800 flex items-center space-x-2 mb-6"><User className="text-teal-600" size={20}/><span>แก้ไขโปรไฟล์</span></h3>
               <form onSubmit={handleUpdateProfile} className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">

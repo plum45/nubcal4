@@ -57,7 +57,9 @@
                 Target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
                 Edit2: <><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></>,
                 Globe: <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
-                RefreshCw: <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></>
+                RefreshCw: <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></>,
+                Calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>,
+                X: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -76,7 +78,6 @@
             measurementId: "G-4EHW3MLZ4G"
         };
 
-        // 💡 ฐานข้อมูลอาหารในตัว (Offline Food Database)
         const LOCAL_FOOD_DB = [
             { name: "ข้าวมันไก่", calories: 596, protein: 16, carbs: 60, fat: 20, summary: "อร่อยแต่ไขมันสูง ควรเลี่ยงหนัง" },
             { name: "ข้าวมันไก่ทอด", calories: 695, protein: 14, carbs: 65, fat: 35, summary: "ไขมันและแคลอรีสูงมาก" },
@@ -152,16 +153,24 @@
             
             const [foodInput, setFoodInput] = useState("");
             const [loading, setLoading] = useState(false);
-            const [loadingText, setLoadingText] = useState(""); // ระบุสถานะว่าค้นหาจากไหน
+            const [loadingText, setLoadingText] = useState(""); 
             const [result, setResult] = useState(null);
             const [error, setError] = useState(null);
             const [mealType, setMealType] = useState('Lunch');
-            const [dailyLog, setDailyLog] = useState([]);
+            
+            // Calendar & Data states
+            const [selectedDate, setSelectedDate] = useState(new Date());
+            const [allMeals, setAllMeals] = useState([]);
             const [waterIntake, setWaterIntake] = useState(0);
             
-            // โหมดกรอกแคลอรีเอง (กรณีค้นหาไม่เจอทั้ง Local และ Web)
             const [manualEntryMode, setManualEntryMode] = useState(false);
             const [manualData, setManualData] = useState({ calories: '', protein: '', carbs: '', fat: '' });
+
+            const calendarRef = useRef(null);
+
+            // Helpers for Calendar
+            const isSameDay = (d1, d2) => d1.toDateString() === d2.toDateString();
+            const isToday = (d) => isSameDay(d, new Date());
 
             const getGreeting = () => {
                 const hour = new Date().getHours();
@@ -169,6 +178,29 @@
                 if (hour < 18) return 'สวัสดีตอนบ่าย ☕';
                 return 'สวัสดีตอนเย็น 🌙';
             };
+
+            // Generate Calendar Dates (14 days past, 2 days future)
+            const getDates = () => {
+                const dates = [];
+                const today = new Date();
+                for (let i = -14; i <= 2; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + i);
+                    dates.push(d);
+                }
+                return dates;
+            };
+            const calendarDates = getDates();
+
+            // Auto-scroll calendar to selected date
+            useEffect(() => {
+                if (calendarRef.current) {
+                    const activeBtn = calendarRef.current.querySelector('.active-date');
+                    if (activeBtn) {
+                        activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                    }
+                }
+            }, [selectedDate]);
 
             useEffect(() => {
                 const timer = setTimeout(() => setSplashStep('finished'), 2000);
@@ -186,6 +218,7 @@
                 return () => unsubscribe();
             }, [isSDKReady]);
 
+            // Fetch Profile & ALL Meals once
             useEffect(() => {
                 if (!user || !isSDKReady) return;
                 const { getFirestore, doc, getDoc, collection, onSnapshot } = window.FirebaseSDK;
@@ -204,17 +237,31 @@
                 });
 
                 const unsubscribeMeals = onSnapshot(collection(db, 'artifacts', appIdStr, 'users', user.uid, 'meals'), (snapshot) => {
-                    const todayStr = new Date().toDateString();
-                    const filtered = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.timestamp && m.timestamp.toDate().toDateString() === todayStr);
-                    setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
+                    setAllMeals(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
-                const unsubscribeWater = onSnapshot(doc(db, 'artifacts', appIdStr, 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), (docSnap) => {
+                return () => unsubscribeMeals();
+            }, [user, isSDKReady]);
+
+            // Fetch Water when Selected Date changes
+            useEffect(() => {
+                if (!user || !isSDKReady) return;
+                const { getFirestore, doc, onSnapshot } = window.FirebaseSDK;
+                const dateStr = selectedDate.toLocaleDateString('en-CA');
+                
+                const unsubscribeWater = onSnapshot(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', dateStr), (docSnap) => {
                     setWaterIntake(docSnap.exists() ? docSnap.data().amount : 0);
                 });
 
-                return () => { unsubscribeMeals(); unsubscribeWater(); };
-            }, [user, isSDKReady]);
+                return () => unsubscribeWater();
+            }, [user, isSDKReady, selectedDate]);
+
+            // Derive Daily Log from All Meals based on Selected Date
+            const dailyLog = allMeals.filter(m => {
+                if (!m.timestamp) return false;
+                const d = m.timestamp.toDate ? m.timestamp.toDate() : new Date(m.timestamp);
+                return d.toDateString() === selectedDate.toDateString();
+            }).sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
             const calculateStats = (data) => {
                 const { gender, age, weight, height, activity, goal } = data;
@@ -262,28 +309,23 @@
                 setProfile(newProfile); setView('home');
             };
 
-            // 💡 ค้นหาข้อมูลแบบ Hybrid (Local -> Web API -> Manual)
             const handleSearchFood = async (foodName) => {
-                const targetText = (foodName || foodInput).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').trim().toLowerCase(); // ลบ Emoji
+                const targetText = (foodName || foodInput).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').trim().toLowerCase(); 
                 if (!targetText) return;
                 
                 setLoading(true); setError(null); setManualEntryMode(false);
                 
-                // ขั้นที่ 1: ค้นหาในฐานข้อมูลส่วนตัวก่อน (Local DB)
                 setLoadingText("กำลังค้นหาในฐานข้อมูล...");
                 const foundLocal = LOCAL_FOOD_DB.find(f => targetText.includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(targetText));
                 
                 if (foundLocal) {
                     setTimeout(() => {
                         setResult({ ...foundLocal });
-                        setView('result');
-                        setFoodInput("");
-                        setLoading(false);
-                    }, 400); // ดีเลย์นิดหน่อยให้ดูสมูท
+                        setView('result'); setFoodInput(""); setLoading(false);
+                    }, 400); 
                     return;
                 }
 
-                // ขั้นที่ 2: ถ้าไม่เจอ ให้ดึงจากเว็บ API (Open Food Facts - ฟรี ไม่ต้องใช้ Key)
                 setLoadingText("กำลังค้นหาจากเครือข่ายเว็บทั่วโลก...");
                 try {
                     const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(targetText)}&search_simple=1&action=process&json=1&page_size=1`);
@@ -291,7 +333,6 @@
 
                     if (data.products && data.products.length > 0) {
                         const product = data.products[0];
-                        // หาค่าแคลอรีต่อ 100g หรือต่อหน่วยบริโภค
                         const cal = product.nutriments['energy-kcal_100g'] || product.nutriments['energy-kcal_serving'] || product.nutriments['energy-kcal'] || 0;
 
                         if (cal > 0) {
@@ -303,9 +344,7 @@
                                 fat: Math.round(product.nutriments['fat_100g'] || product.nutriments['fat_serving'] || 0),
                                 summary: "ข้อมูลอ้างอิงจากฐานข้อมูลสากล (Open Food Facts)"
                             });
-                            setView('result');
-                            setFoodInput("");
-                            setLoading(false);
+                            setView('result'); setFoodInput(""); setLoading(false);
                             return;
                         }
                     }
@@ -313,7 +352,6 @@
                     console.error("Web fetch failed", err);
                 }
 
-                // ขั้นที่ 3: ไม่พบในเว็บอีก ให้เปิดหน้ากรอกข้อมูลเอง
                 setLoading(false);
                 setManualEntryMode(true);
                 setManualData({ calories: '', protein: '', carbs: '', fat: '' });
@@ -322,26 +360,29 @@
             const handleSaveManualEntry = (e) => {
                 e.preventDefault();
                 const cal = parseInt(manualData.calories) || 0;
-                if(cal <= 0) {
-                    setError("กรุณาระบุจำนวนแคลอรีที่มากกว่า 0"); return;
-                }
+                if(cal <= 0) { setError("กรุณาระบุจำนวนแคลอรีที่มากกว่า 0"); return; }
                 setResult({
-                    food_name: foodInput,
-                    calories: cal,
+                    food_name: foodInput, calories: cal,
                     protein: parseInt(manualData.protein) || 0,
                     carbs: parseInt(manualData.carbs) || 0,
                     fat: parseInt(manualData.fat) || 0,
                     summary: "เพิ่มข้อมูลโดยผู้ใช้งาน"
                 });
-                setView('result');
-                setFoodInput("");
-                setManualEntryMode(false);
+                setView('result'); setFoodInput(""); setManualEntryMode(false);
             };
 
             const saveMeal = async () => {
                 try {
-                    const { getFirestore, collection, addDoc, serverTimestamp } = window.FirebaseSDK;
-                    await addDoc(collection(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'meals'), { ...result, mealType, timestamp: serverTimestamp() });
+                    const { getFirestore, collection, addDoc } = window.FirebaseSDK;
+                    
+                    // บันทึกโดยอิงจาก "วันที่เลือกในปฏิทิน"
+                    const now = new Date();
+                    const mealDate = new Date(selectedDate);
+                    mealDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
+                    await addDoc(collection(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'meals'), { 
+                        ...result, mealType, timestamp: mealDate 
+                    });
                     setView('home'); setResult(null);
                 } catch (err) { setError(`Save Error: ${err.message}`); }
             };
@@ -350,7 +391,8 @@
                 try {
                     const { getFirestore, doc, setDoc } = window.FirebaseSDK;
                     const newAmount = Math.max(0, waterIntake + amount);
-                    await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
+                    const dateStr = selectedDate.toLocaleDateString('en-CA');
+                    await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', dateStr), { amount: newAmount }, { merge: true });
                 } catch (err) { setError(`Water Error`); }
             };
 
@@ -369,6 +411,12 @@
 
             const getTrainerTip = () => {
                 if (!profile) return "ระบุเป้าหมายในโปรไฟล์ เพื่อให้โค้ชแนะนำได้ตรงจุดครับ";
+                
+                // หากดูข้อมูลย้อนหลัง
+                if (!isToday(selectedDate)) {
+                    return `สรุปการกินของวันที่ ${selectedDate.toLocaleDateString('th-TH', {day:'numeric', month:'short'})}: คุณกินไป ${consumedCal} / ${targetCal} kcal`;
+                }
+
                 if (consumedCal === 0) return "เริ่มต้นวันใหม่! อย่าลืมทานมื้อเช้าเพื่อเติมพลังงานนะครับ 🍳";
                 
                 const remCal = targetCal - consumedCal;
@@ -394,8 +442,8 @@
                 <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-[#fafaf9]">
                     <div className="minimal-card p-10 max-w-sm w-full animate-in">
                         <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center text-stone-800 mx-auto mb-6"><Icon name="Activity" size={28} /></div>
-                        <h1 className="text-2xl font-bold text-stone-900 mb-3">จดแคล & โค้ชส่วนตัว</h1>
-                        <p className="text-stone-500 text-sm mb-10 leading-relaxed">พิมพ์ค้นหาเมนู ดึงข้อมูลอัตโนมัติ พร้อมรับคำแนะนำโภชนาการแบบทันที</p>
+                        <h1 className="text-2xl font-bold text-stone-900 mb-3">สมุดจดแคลส่วนตัว</h1>
+                        <p className="text-stone-500 text-sm mb-10 leading-relaxed">มีปฏิทินย้อนหลัง ค้นหาเมนูง่ายๆ พร้อมรับคำแนะนำโภชนาการแบบทันที</p>
                         <button onClick={() => setStep('checking')} className="w-full btn-primary py-4 font-semibold text-[15px] flex items-center justify-center space-x-2">
                             <span>เริ่มต้นใช้งาน</span><Icon name="ArrowRight" size={18} />
                         </button>
@@ -407,7 +455,7 @@
                 <div className="min-h-screen p-6 flex flex-col justify-center max-w-md mx-auto text-left bg-[#fafaf9]">
                     <div className="minimal-card p-8 animate-in">
                         <h1 className="text-2xl font-bold mb-1 text-stone-900">สร้างโปรไฟล์</h1>
-                        <p className="text-stone-500 text-sm mb-6">เพื่อให้โค้ชคำนวณเป้าหมายที่เหมาะสม</p>
+                        <p className="text-stone-500 text-sm mb-6">เพื่อให้ระบบคำนวณเป้าหมายที่เหมาะสม</p>
                         <form onSubmit={handleRegister} className="space-y-4">
                             <div className="space-y-1">
                                 <label className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider ml-1">เป้าหมายหลัก</label>
@@ -431,7 +479,7 @@
                                     <option value="1.2">นั่งทำงานเป็นหลัก</option><option value="1.375">ออกกำลังเบา (1-3 วัน)</option><option value="1.55">ออกกำลังปานกลาง (3-5 วัน)</option><option value="1.725">ออกกำลังหนัก (6-7 วัน)</option>
                                 </select>
                             </div>
-                            <button type="submit" className="w-full btn-primary py-4 font-semibold text-[15px] mt-2">คำนวณแผนของฉัน</button>
+                            <button type="submit" className="w-full btn-primary py-4 font-semibold text-[15px] mt-2">เริ่มใช้งานเลย</button>
                         </form>
                     </div>
                 </div>
@@ -439,42 +487,66 @@
 
             return (
                 <div className="min-h-screen pb-32 max-w-md mx-auto bg-[#fafaf9]">
-                    <header className="px-6 pt-10 pb-4">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <p className="text-xs text-stone-500 font-medium mb-1">{getGreeting()}</p>
-                                <h2 className="text-xl font-bold text-stone-800 flex items-center gap-2">
-                                    <span>สมุดบันทึกสุขภาพ</span>
-                                </h2>
-                            </div>
-                        </div>
-
-                        {/* Smart Trainer Alert */}
-                        <div className="bg-stone-900 text-white rounded-2xl p-4 mb-6 shadow-lg flex gap-3 items-start animate-in">
-                            <div className="bg-stone-800 p-2 rounded-full shrink-0"><Icon name="Target" size={20} className="text-teal-400"/></div>
-                            <div>
-                                <h4 className="text-sm font-bold mb-1">โค้ชแนะนำ</h4>
-                                <p className="text-xs text-stone-300 leading-relaxed">{getTrainerTip()}</p>
-                            </div>
-                        </div>
-
-                        {/* Detailed Macro Ring & Bars */}
-                        <div className="minimal-card p-6 flex items-center justify-between shadow-sm">
-                            <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
-                                <svg className="w-full h-full -rotate-90">
-                                    <circle cx="56" cy="56" r="48" fill="transparent" stroke="#f5f5f4" strokeWidth="10" />
-                                    <circle cx="56" cy="56" r="48" fill="transparent" stroke={progressCal > 100 ? "#ef4444" : "#14b8a6"} strokeWidth="10" strokeDasharray={301.5} strokeDashoffset={301.5 - (301.5 * Math.min(progressCal, 100)) / 100} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
-                                </svg>
-                                <div className="absolute text-center flex flex-col items-center justify-center mt-1">
-                                    <p className="text-2xl font-bold text-stone-800 leading-none">{consumedCal}</p>
-                                    <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mt-1">/ {targetCal}</p>
+                    <header className="pt-6 pb-4">
+                        <div className="px-6 mb-4">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="text-xs text-stone-500 font-medium mb-1">{isToday(selectedDate) ? getGreeting() : 'ดูข้อมูลย้อนหลัง 🕒'}</p>
+                                    <h2 className="text-xl font-bold text-stone-800 flex items-center gap-2">
+                                        <span>สมุดบันทึกสุขภาพ</span>
+                                    </h2>
                                 </div>
                             </div>
-                            
-                            <div className="flex-1 ml-5 space-y-3.5 w-full">
-                                <MacroProgress label="โปรตีน" current={consumedPro} target={targetPro} color="bg-rose-400" bg="bg-rose-50" />
-                                <MacroProgress label="คาร์บ" current={consumedCarb} target={targetCarb} color="bg-amber-400" bg="bg-amber-50" />
-                                <MacroProgress label="ไขมัน" current={consumedFat} target={targetFat} color="bg-stone-400" bg="bg-stone-100" />
+                        </div>
+
+                        {/* Calendar Scroll */}
+                        <div className="px-4">
+                            <div className="flex overflow-x-auto chip-scroll gap-2 pb-2" ref={calendarRef}>
+                                {calendarDates.map((d, i) => {
+                                    const active = isSameDay(d, selectedDate);
+                                    return (
+                                        <button 
+                                            key={i} 
+                                            onClick={() => setSelectedDate(d)}
+                                            className={`min-w-[56px] flex flex-col items-center py-2 px-1 rounded-[20px] transition-all border ${active ? 'bg-stone-900 border-stone-900 text-white shadow-md active-date' : 'bg-white border-stone-100 text-stone-500 hover:bg-stone-50'}`}
+                                        >
+                                            <span className="text-[10px] font-semibold">{d.toLocaleDateString('th-TH', { weekday: 'short' })}</span>
+                                            <span className="text-lg font-bold mt-0.5">{d.getDate()}</span>
+                                            {isToday(d) && <div className={`w-1 h-1 rounded-full mt-1 ${active ? 'bg-white' : 'bg-teal-500'}`}></div>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="px-6 mt-4">
+                            {/* Smart Trainer Alert */}
+                            <div className="bg-stone-900 text-white rounded-2xl p-4 mb-6 shadow-lg flex gap-3 items-start animate-in">
+                                <div className="bg-stone-800 p-2 rounded-full shrink-0"><Icon name="Target" size={20} className="text-teal-400"/></div>
+                                <div>
+                                    <h4 className="text-sm font-bold mb-1">คำแนะนำประจำวัน</h4>
+                                    <p className="text-xs text-stone-300 leading-relaxed">{getTrainerTip()}</p>
+                                </div>
+                            </div>
+
+                            {/* Detailed Macro Ring & Bars */}
+                            <div className="minimal-card p-6 flex items-center justify-between shadow-sm">
+                                <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
+                                    <svg className="w-full h-full -rotate-90">
+                                        <circle cx="56" cy="56" r="48" fill="transparent" stroke="#f5f5f4" strokeWidth="10" />
+                                        <circle cx="56" cy="56" r="48" fill="transparent" stroke={progressCal > 100 ? "#ef4444" : "#14b8a6"} strokeWidth="10" strokeDasharray={301.5} strokeDashoffset={301.5 - (301.5 * Math.min(progressCal, 100)) / 100} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
+                                    </svg>
+                                    <div className="absolute text-center flex flex-col items-center justify-center mt-1">
+                                        <p className="text-2xl font-bold text-stone-800 leading-none">{consumedCal}</p>
+                                        <p className="text-[9px] font-semibold text-stone-400 uppercase tracking-widest mt-1">/ {targetCal}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex-1 ml-5 space-y-3.5 w-full">
+                                    <MacroProgress label="โปรตีน" current={consumedPro} target={targetPro} color="bg-rose-400" bg="bg-rose-50" />
+                                    <MacroProgress label="คาร์บ" current={consumedCarb} target={targetCarb} color="bg-amber-400" bg="bg-amber-50" />
+                                    <MacroProgress label="ไขมัน" current={consumedFat} target={targetFat} color="bg-stone-400" bg="bg-stone-100" />
+                                </div>
                             </div>
                         </div>
                     </header>
@@ -529,11 +601,25 @@
                                     </div>
                                 )}
                                 
+                                {/* Water Tracker for Selected Date */}
+                                <div className="bg-blue-50/60 rounded-[32px] border border-blue-100/50 p-6 flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center space-x-4">
+                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-500 shadow-sm"><Icon name="Droplets" size={24} /></div>
+                                        <div><h3 className="font-bold text-sm text-slate-800">ดื่มน้ำวันนี้</h3><p className="text-xs text-slate-500">{waterIntake} / 8 แก้ว</p></div>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => handleAddWater(-1)} className="w-8 h-8 rounded-full bg-white text-blue-500 font-bold border border-blue-100 shadow-sm">-</button>
+                                        <button onClick={() => handleAddWater(1)} className="w-10 h-10 rounded-full bg-blue-500 text-white font-bold shadow-md">+</button>
+                                    </div>
+                                </div>
+
                                 {/* Timeline History */}
                                 <div>
-                                    <h3 className="text-xs font-semibold text-stone-400 mb-4 px-1 uppercase tracking-wide">ประวัติการกินวันนี้</h3>
+                                    <h3 className="text-xs font-semibold text-stone-400 mb-4 px-1 uppercase tracking-wide">
+                                        {isToday(selectedDate) ? "ประวัติการกินวันนี้" : `ประวัติวันที่ ${selectedDate.toLocaleDateString('th-TH', {day:'numeric', month:'short'})}`}
+                                    </h3>
                                     <div className="minimal-card p-5 space-y-4">
-                                        {dailyLog.length === 0 ? <p className="text-center text-stone-400 py-6 text-sm">ยังไม่ได้ทานอะไรเลย 🍽️</p> : 
+                                        {dailyLog.length === 0 ? <p className="text-center text-stone-400 py-6 text-sm">ยังไม่มีข้อมูล 🍽️</p> : 
                                             dailyLog.map((m, i) => (
                                                 <div key={m.id} className={`flex items-center justify-between ${i !== dailyLog.length - 1 ? 'border-b border-stone-100 pb-4' : ''}`}>
                                                     <div className="flex items-center gap-3">
@@ -559,7 +645,6 @@
                             <div className="minimal-card p-8 text-center animate-in">
                                 <div className="flex justify-start mb-4"><button onClick={() => setView('home')} className="text-stone-400 p-2"><Icon name="ChevronLeft"/></button></div>
                                 
-                                {/* ไอคอนบอกแหล่งที่มา (ถ้ามีคำว่าเว็บ ให้โชว์รูปลูกโลก) */}
                                 <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center text-teal-600 mx-auto mb-4">
                                     {result.summary.includes("เว็บ") || result.summary.includes("Open Food") ? <Icon name="Globe" size={24}/> : <Icon name="Activity" size={24}/>}
                                 </div>

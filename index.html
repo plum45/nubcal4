@@ -125,7 +125,7 @@
                 const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
                 const appInstance = initializeApp(firebaseConfig);
                 const authInstance = getAuth(appInstance);
-                signInAnonymously(authInstance).catch(() => setError("Firebase Connection Error"));
+                signInAnonymously(authInstance).catch((err) => setError(`Firebase Auth Error: ${err.message || err}`));
                 const unsubscribe = onAuthStateChanged(authInstance, setUser);
                 return () => unsubscribe();
             }, [isSDKReady]);
@@ -149,18 +149,18 @@
                         });
                         setStep('dashboard');
                     } else setStep('onboarding');
-                });
+                }).catch(err => setError(`Fetch Profile Error: ${err.message || err}`));
 
                 const unsubscribeMeals = onSnapshot(collection(db, 'artifacts', appIdStr, 'users', user.uid, 'meals'), (snapshot) => {
                     const todayStr = new Date().toDateString();
                     const filtered = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
                         .filter(m => m.timestamp && m.timestamp.toDate().toDateString() === todayStr);
                     setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
-                });
+                }, (err) => setError(`Meals Sync Error: ${err.message || err}`));
 
                 const unsubscribeWater = onSnapshot(doc(db, 'artifacts', appIdStr, 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), (docSnap) => {
                     setWaterIntake(docSnap.exists() ? docSnap.data().amount : 0);
-                });
+                }, (err) => setError(`Water Sync Error: ${err.message || err}`));
 
                 return () => { unsubscribeMeals(); unsubscribeWater(); };
             }, [user, isSDKReady]);
@@ -240,14 +240,14 @@
                         protein: parsed.protein || 0,
                         carbs: parsed.carbs || 0,
                         fat: parsed.fat || 0,
-                        summary: parsed.summary || "ไม่สามารถวิเคราะห์รายละเอียดได้ชัดเจน กรุณาลองถ่ายภาพใหม่อีกครั้ง"
+                        summary: parsed.summary || "ไม่สามารถวิเคราะห์รายละเอียดได้ชัดเจน"
                     };
                     
                     setResult(finalResult); 
                     setView('result');
                 } catch (err) { 
                     console.error("Analysis Error:", err);
-                    setError("วิเคราะห์ล้มเหลว กรุณาถ่ายภาพให้ชัดเจนและเห็นอาหาร/ฉลากเต็มๆ"); 
+                    setError(`Analysis Error: ${err.message || err}`); 
                 } finally { setLoading(false); }
             };
 
@@ -271,20 +271,30 @@
                     setTextLog("");
                 } catch (err) { 
                     console.error("Text Log Error:", err);
-                    setError("ประมวลผลข้อความไม่ได้ กรุณาพิมพ์ชื่ออาหารให้ชัดเจน"); 
+                    setError(`Text Log Error: ${err.message || err}`); 
                 } finally { setLoadingTextLog(false); }
             };
 
             const saveMeal = async () => {
-                const { getFirestore, collection, addDoc, serverTimestamp } = window.FirebaseSDK;
-                await addDoc(collection(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'meals'), { ...result, mealType, timestamp: serverTimestamp() });
-                setView('home'); setImagePreview(null); setResult(null);
+                try {
+                    const { getFirestore, collection, addDoc, serverTimestamp } = window.FirebaseSDK;
+                    await addDoc(collection(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'meals'), { ...result, mealType, timestamp: serverTimestamp() });
+                    setView('home'); setImagePreview(null); setResult(null);
+                } catch (err) {
+                    console.error("Save Meal Error:", err);
+                    setError(`Save Error: ${err.message || err}`);
+                }
             };
 
             const handleAddWater = async (amount) => {
-                const { getFirestore, doc, setDoc } = window.FirebaseSDK;
-                const newAmount = Math.max(0, waterIntake + amount);
-                await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
+                try {
+                    const { getFirestore, doc, setDoc } = window.FirebaseSDK;
+                    const newAmount = Math.max(0, waterIntake + amount);
+                    await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
+                } catch (err) {
+                    console.error("Add Water Error:", err);
+                    setError(`Water Sync Error: ${err.message || err}`);
+                }
             };
 
             const handleSendMessage = async () => {
@@ -294,7 +304,10 @@
                 try {
                     const parsed = await callGemini(`Nutrition coach context. History: ${JSON.stringify(newChat)}. Reply briefly in Thai. JSON: { "reply": "..." }`);
                     setChatMessages([...newChat, { role: 'model', content: parsed.reply }]);
-                } catch (err) { setChatMessages([...newChat, { role: 'model', content: "ระบบขัดข้องชั่วคราวครับ" }]); }
+                } catch (err) { 
+                    console.error("Chat Error:", err);
+                    setChatMessages([...newChat, { role: 'model', content: `ระบบขัดข้อง: ${err.message || err}` }]); 
+                }
                 finally { setIsChatting(false); }
             };
 
@@ -304,7 +317,10 @@
                     const logStr = dailyLog.map(m => `${m.food_name}(${m.calories})`).join(', ');
                     const parsed = await callGemini(`Analyze eating habits: ${logStr} (Target: ${profile?.tdee}). Return Thai JSON: { "insight": "...", "score": int }`);
                     setInsights(parsed);
-                } catch (err) { console.error(err); }
+                } catch (err) { 
+                    console.error("Insights Error:", err);
+                    setError(`Insights Error: ${err.message || err}`);
+                }
                 finally { setLoadingInsights(false); }
             };
 
@@ -374,7 +390,13 @@
                     </header>
 
                     <main className="px-6 mt-6 relative z-10 space-y-6">
-                        {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs flex items-center space-x-2 animate-in text-left border border-red-100"><Icon name="AlertCircle" size={16}/><span>{error}</span></div>}
+                        {error && (
+                            <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs flex items-start space-x-2 animate-in text-left border border-red-100 overflow-auto break-words max-h-40">
+                                <Icon name="AlertCircle" size={16} className="mt-0.5 flex-shrink-0" />
+                                <span className="flex-1 font-mono leading-relaxed">{error}</span>
+                                <button onClick={() => setError(null)} className="p-1 hover:bg-red-100 rounded-md transition-colors"><Icon name="X" size={14}/></button>
+                            </div>
+                        )}
                         {view === 'home' && (
                             <>
                                 <div className="glass-panel rounded-3xl p-3 flex items-center space-x-3 shadow-sm"><input type="text" value={textLog} onChange={e => setTextLog(e.target.value)} placeholder="กินอะไรไป? พิมพ์บันทึกที่นี่..." className="flex-1 bg-transparent text-sm outline-none px-2 text-slate-800" onKeyDown={e => e.key === 'Enter' && handleTextLog()} /><button onClick={handleTextLog} className="p-2 bg-teal-500 text-white rounded-full shadow active:scale-90" disabled={loadingTextLog}>{loadingTextLog ? <Icon name="RefreshCw" size={16} className="animate-spin" /> : <Icon name="Send" size={16} />}</button></div>

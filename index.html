@@ -220,6 +220,9 @@
                 }
                 
                 let content = [];
+                // เปลี่ยนไปใช้โมเดล nvidia/llama-nemotron-embed-vl-1b-v2:free ตามที่ระบุ (รองรับทั้งภาพและข้อความ)
+                let targetModel = "nvidia/llama-nemotron-embed-vl-1b-v2:free"; 
+                
                 if (mimeType && base64Data) {
                     content = [
                         { type: "text", text: prompt },
@@ -228,8 +231,6 @@
                 } else {
                     content = prompt;
                 }
-
-                const targetModel = "stepfun/step-3.5-flash:free";
 
                 const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",

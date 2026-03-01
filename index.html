@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NubCal AI - สมุดจดแคลอรีอัจฉริยะ</title>
+    <title>NubCal - สมุดจดแคลอรีส่วนตัว</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,36 +16,13 @@
     <script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.3/dist/dotlottie-wc.js" type="module"></script>
     
     <style>
-        body { 
-            font-family: 'Kanit', sans-serif; 
-            background-color: #fafaf9; 
-            margin: 0; 
-            -webkit-tap-highlight-color: transparent; 
-            overflow-x: hidden; 
-            color: #1c1917; 
-        }
-        
-        .minimal-card {
-            background: #ffffff;
-            border-radius: 28px;
-            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.04);
-            border: 1px solid rgba(0,0,0,0.02);
-        }
-        
-        .glass-panel { background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.6); }
-        .glass-card { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.8); }
+        body { font-family: 'Kanit', sans-serif; background-color: #fafaf9; margin: 0; -webkit-tap-highlight-color: transparent; overflow-x: hidden; color: #1c1917; }
+        .minimal-card { background: #ffffff; border-radius: 28px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.02); }
         .minimal-nav { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(0,0,0,0.03); }
-
-        .btn-primary {
-            background-color: #1c1917; 
-            color: white;
-            border-radius: 9999px;
-            transition: transform 0.1s ease, box-shadow 0.1s ease;
-        }
+        .btn-primary { background-color: #1c1917; color: white; border-radius: 9999px; transition: transform 0.1s ease, box-shadow 0.1s ease; }
         .btn-primary:active { transform: scale(0.96); }
-
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
         .chip-scroll::-webkit-scrollbar { display: none; }
-        
         @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
@@ -67,24 +44,20 @@
         const Icon = ({ name, size = 24, className = "" }) => {
             const icons = {
                 Activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
-                RefreshCw: <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></>,
+                Search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
                 AlertCircle: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
                 Home: <><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
                 User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
                 Plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
                 History: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><polyline points="12 7 12 12 15 15"/></>,
-                PieChart: <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
                 Droplets: <><path d="M7 16.3c2.2 0 4-1.8 4-4 0-3.3-4-6.3-4-6.3s-4 3-4 6.3c0 2.2 1.8 4 4 4Z"/><path d="M17 18.5c1.1 0 2-1.1 2-2.5 0-2.4-2-4-2-4s-2 1.6-2 4c0 1.4.9 2.5 2 2.5Z"/></>,
-                MessageCircle: <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>,
-                Send: <><line x1="22" y1="2" x2="11" y2="13"/><polyline points="22 2 15 22 11 13 2 9 22 2"/></>,
-                Sparkles: <><path d="m12 3 1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z"/></>,
-                X: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
                 ChevronLeft: <polyline points="15 18 9 12 15 6"/>,
                 CheckCircle2: <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></>,
                 ArrowRight: <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>,
-                Settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
-                Search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
-                Target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>
+                Target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+                Edit2: <><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></>,
+                Globe: <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
+                RefreshCw: <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -103,11 +76,69 @@
             measurementId: "G-4EHW3MLZ4G"
         };
 
-        const QUICK_TAGS = [
-            "☕ กาแฟดำ", "🥚 ไข่ต้ม", "🥗 สลัดผัก", 
-            "🍌 กล้วยหอม", "🍗 อกไก่ย่าง", "🥛 นมโปรตีน",
-            "🥪 แซนด์วิชทูน่า", "🍎 แอปเปิ้ล"
+        // 💡 ฐานข้อมูลอาหารในตัว (Offline Food Database)
+        const LOCAL_FOOD_DB = [
+            { name: "ข้าวมันไก่", calories: 596, protein: 16, carbs: 60, fat: 20, summary: "อร่อยแต่ไขมันสูง ควรเลี่ยงหนัง" },
+            { name: "ข้าวมันไก่ทอด", calories: 695, protein: 14, carbs: 65, fat: 35, summary: "ไขมันและแคลอรีสูงมาก" },
+            { name: "กะเพราหมูสับไข่ดาว", calories: 630, protein: 25, carbs: 55, fat: 30, summary: "โปรตีนดี แต่ระวังน้ำมันผัด" },
+            { name: "กะเพราไก่ไข่ดาว", calories: 580, protein: 28, carbs: 55, fat: 20, summary: "เมนูสิ้นคิดที่แคลอรีกำลังดี" },
+            { name: "ส้มตำไทย", calories: 60, protein: 2, carbs: 14, fat: 0, summary: "แคลอรีต่ำ ระวังโซเดียม" },
+            { name: "ผัดไทยกุ้งสด", calories: 545, protein: 18, carbs: 75, fat: 18, summary: "คาร์บและไขมันค่อนข้างสูง" },
+            { name: "ก๋วยเตี๋ยวเส้นเล็กหมูน้ำตก", calories: 350, protein: 20, carbs: 45, fat: 10, summary: "แคลอรีปานกลาง ระวังโซเดียม" },
+            { name: "ข้าวไข่เจียว", calories: 470, protein: 12, carbs: 45, fat: 25, summary: "ไขมันจากน้ำมันทอดสูง" },
+            { name: "ข้าวหมูแดง", calories: 540, protein: 20, carbs: 70, fat: 15, summary: "โปรตีนดี แต่น้ำราดมีน้ำตาล" },
+            { name: "โจ๊กหมูไข่ลวก", calories: 250, protein: 15, carbs: 35, fat: 5, summary: "ย่อยง่าย แคลอรีต่ำ" },
+            { name: "ต้มยำกุ้งน้ำใส", calories: 65, protein: 9, carbs: 5, fat: 1, summary: "แคลอรีต่ำมาก โปรตีนดี" },
+            { name: "ต้มยำกุ้งน้ำข้น", calories: 120, protein: 10, carbs: 8, fat: 6, summary: "มีไขมันจากนมหรือกะทิ" },
+            { name: "แกงเขียวหวานไก่", calories: 240, protein: 15, carbs: 10, fat: 15, summary: "กะทิทำให้ไขมันและแคลอรีสูง" },
+            { name: "ผัดซีอิ๊วหมู", calories: 680, protein: 22, carbs: 80, fat: 30, summary: "เส้นใหญ่ดูดน้ำมัน แคลอรีสูง" },
+            { name: "ราดหน้าหมู", calories: 400, protein: 18, carbs: 50, fat: 12, summary: "ทางเลือกที่ดีกว่าผัดซีอิ๊ว" },
+            { name: "ข้าวซอยไก่", calories: 390, protein: 18, carbs: 40, fat: 18, summary: "กะทิและเส้นทอดทำให้แคลสูง" },
+            { name: "ข้าวคลุกกะปิ", calories: 410, protein: 15, carbs: 55, fat: 12, summary: "สารอาหารครบถ้วน ระวังโซเดียม" },
+            { name: "ไก่ย่าง (1 ไม้)", calories: 165, protein: 20, carbs: 2, fat: 8, summary: "โปรตีนดี ลอกหนังเพื่อลดไขมัน" },
+            { name: "หมูปิ้ง (1 ไม้)", calories: 125, protein: 8, carbs: 5, fat: 8, summary: "ไขมันแฝงสูง ควรกินแต่พอดี" },
+            { name: "ข้าวเหนียว (1 ปั้น)", calories: 160, protein: 3, carbs: 35, fat: 0, summary: "คาร์บเน้นๆ พลังงานสูง" },
+            { name: "ลาบหมู", calories: 130, protein: 14, carbs: 6, fat: 5, summary: "โปรตีนสูง แคลอรีต่ำ" },
+            { name: "น้ำตกหมู", calories: 165, protein: 15, carbs: 5, fat: 9, summary: "อร่อย แต่อาจติดมันเยอะ" },
+            { name: "ข้าวผัดหมู", calories: 550, protein: 18, carbs: 65, fat: 22, summary: "ระวังน้ำมันที่ใช้ผัด" },
+            { name: "สุกี้แห้งทะเล", calories: 345, protein: 25, carbs: 40, fat: 8, summary: "เมนูลดน้ำหนักยอดฮิต" },
+            { name: "มาม่าผัด", calories: 450, protein: 8, carbs: 60, fat: 20, summary: "โซเดียมสูง คาร์บสูง" },
+            { name: "ซูชิแซลมอน (1 คำ)", calories: 45, protein: 3, carbs: 6, fat: 1, summary: "ไขมันดีจากปลาแซลมอน" },
+            { name: "ซาชิมิแซลมอน (5 ชิ้น)", calories: 200, protein: 20, carbs: 0, fat: 13, summary: "โปรตีนและไขมันดีเน้นๆ" },
+            { name: "ราเมนทงคตสึ", calories: 500, protein: 20, carbs: 60, fat: 20, summary: "น้ำซุปกระดูกหมูไขมันและโซเดียมสูง" },
+            { name: "พิซซ่าฮาวายเอี้ยน (1 ชิ้น)", calories: 260, protein: 12, carbs: 30, fat: 10, summary: "แป้งและชีสเยอะ ควรกินจำกัด" },
+            { name: "แฮมเบอร์เกอร์เนื้อ", calories: 250, protein: 12, carbs: 30, fat: 9, summary: "แคลอรีปานกลาง ถ้าไม่เพิ่มชีส/เบคอน" },
+            { name: "เฟรนช์ฟรายส์ (กลาง)", calories: 365, protein: 4, carbs: 48, fat: 17, summary: "คาร์บและไขมันทอดลึกสูงมาก" },
+            { name: "ไก่ทอดเกาหลี (3 ชิ้น)", calories: 380, protein: 18, carbs: 20, fat: 25, summary: "ซอสหวานและแป้งทอดแคลอรีสูง" },
+            { name: "สเต็กเนื้อริบอาย (200g)", calories: 550, protein: 48, carbs: 0, fat: 40, summary: "โปรตีนสูงมาก แต่ไขมันแทรกก็สูงเช่นกัน" },
+            { name: "สเต็กอกไก่", calories: 200, protein: 40, carbs: 0, fat: 3, summary: "สุดยอดเมนูสร้างกล้ามเนื้อ" },
+            { name: "สปาเก็ตตี้คาโบนาร่า", calories: 600, protein: 20, carbs: 65, fat: 28, summary: "ครีม ชีส เบคอน พลังงานล้นหลาม" },
+            { name: "สลัดซีซาร์", calories: 350, protein: 10, carbs: 15, fat: 28, summary: "ระวังน้ำสลัดและเบคอนกรอบ" },
+            { name: "แซนด์วิชทูน่า", calories: 280, protein: 15, carbs: 30, fat: 10, summary: "มื้อว่างที่ดี มีโปรตีนและคาร์บ" },
+            { name: "น้ำเปล่า", calories: 0, protein: 0, carbs: 0, fat: 0, summary: "ดีที่สุดสำหรับร่างกาย" },
+            { name: "กาแฟดำ (อเมริกาโน่)", calories: 15, protein: 0, carbs: 2, fat: 0, summary: "ไม่มีน้ำตาล ช่วยเผาผลาญ" },
+            { name: "ลาเต้เย็น (ไม่หวาน)", calories: 120, protein: 6, carbs: 9, fat: 7, summary: "แคลอรีจากนมเป็นหลัก" },
+            { name: "คาปูชิโน่ร้อน", calories: 90, protein: 5, carbs: 8, fat: 4, summary: "ฟองนมเยอะ แคลอรีน้อยกว่าลาเต้" },
+            { name: "ชานมไข่มุก (หวานปกติ)", calories: 360, protein: 2, carbs: 65, fat: 10, summary: "น้ำตาลและคาร์บจากไข่มุกสูงมาก" },
+            { name: "ชาเขียวเย็น (มัทฉะลาเต้)", calories: 250, protein: 6, carbs: 35, fat: 8, summary: "มักจะใส่น้ำตาล/ไซรัปเยอะ" },
+            { name: "ชาไทยเย็น (ชาเย็น)", calories: 310, protein: 4, carbs: 45, fat: 12, summary: "นมข้นหวานและนมข้นจืดเยอะมาก" },
+            { name: "น้ำอัดลม (โคล่า 1 กระป๋อง)", calories: 140, protein: 0, carbs: 39, fat: 0, summary: "น้ำตาลล้วนๆ ไม่มีสารอาหารอื่น" },
+            { name: "น้ำส้มคั้น (1 แก้ว)", calories: 110, protein: 1, carbs: 25, fat: 0, summary: "วิตามินซีสูง แต่น้ำตาลผลไม้ก็สูง" },
+            { name: "นมจืด (1 กล่อง/200ml)", calories: 130, protein: 7, carbs: 10, fat: 7, summary: "แคลเซียมและโปรตีนดี" },
+            { name: "นมถั่วเหลือง (หวานน้อย)", calories: 100, protein: 7, carbs: 10, fat: 4, summary: "ทางเลือกแทนนมวัว ย่อยง่าย" },
+            { name: "นมโปรตีนสูง", calories: 170, protein: 25, carbs: 10, fat: 3, summary: "สะดวกในการเติมโปรตีนหลังออกกำลังกาย" },
+            { name: "เบียร์ (1 กระป๋อง/330ml)", calories: 140, protein: 1, carbs: 11, fat: 0, summary: "แคลอรีว่างเปล่า ยับยั้งการเผาผลาญไขมัน" },
+            { name: "เค้กช็อกโกแลต (1 ชิ้น)", calories: 350, protein: 4, carbs: 45, fat: 18, summary: "น้ำตาลและไขมันแฝงเพียบ" },
+            { name: "ไอศกรีมวานิลลา (1 สกู๊ป)", calories: 137, protein: 2, carbs: 16, fat: 7, summary: "หวานเย็นชื่นใจ แต่ทานแต่น้อย" },
+            { name: "ข้าวเหนียวมะม่วง", calories: 350, protein: 3, carbs: 60, fat: 10, summary: "กะทิและมะม่วงสุกน้ำตาลสูงปรี๊ด" },
+            { name: "ปาท่องโก๋ (1 ตัว)", calories: 130, protein: 2, carbs: 15, fat: 7, summary: "แป้งทอดอมน้ำมันสุดๆ" },
+            { name: "ครัวซองต์", calories: 230, protein: 4, carbs: 25, fat: 13, summary: "เนยเน้นๆ หอมอร่อยแต่ไขมันสูง" },
+            { name: "บิงซู (ถ้วยเล็ก)", calories: 300, protein: 6, carbs: 50, fat: 8, summary: "ระวังท็อปปิ้งและนมข้น" },
+            { name: "แอปเปิ้ล (1 ลูก)", calories: 95, protein: 0, carbs: 25, fat: 0, summary: "ผลไม้แคลอรีต่ำ ไฟเบอร์สูง ดีต่อลำไส้" },
+            { name: "กล้วยหอม (1 ลูก)", calories: 105, protein: 1, carbs: 27, fat: 0, summary: "พลังงานชั้นดีก่อนออกกำลังกาย" }
         ];
+
+        const QUICK_TAGS = ["☕ กาแฟดำ", "🥚 ไข่ต้ม", "🥗 สลัดผัก", "🍌 กล้วยหอม", "🍗 อกไก่ย่าง", "🥛 นมโปรตีน", "🥪 แซนด์วิชทูน่า", "🍎 แอปเปิ้ล"];
 
         function App() {
             const [splashStep, setSplashStep] = useState('animating');
@@ -117,29 +148,20 @@
             const [step, setStep] = useState('loading');
             const [view, setView] = useState('home'); 
             
-            // เพิ่ม goal เข้าไปใน State
-            const [formData, setFormData] = useState({ 
-                gender: 'male', age: '', weight: '', height: '', activity: '1.2', goal: 'maintain' 
-            });
+            const [formData, setFormData] = useState({ gender: 'male', age: '', weight: '', height: '', activity: '1.2', goal: 'maintain' });
             
             const [foodInput, setFoodInput] = useState("");
             const [loading, setLoading] = useState(false);
+            const [loadingText, setLoadingText] = useState(""); // ระบุสถานะว่าค้นหาจากไหน
             const [result, setResult] = useState(null);
             const [error, setError] = useState(null);
             const [mealType, setMealType] = useState('Lunch');
             const [dailyLog, setDailyLog] = useState([]);
             const [waterIntake, setWaterIntake] = useState(0);
             
-            const [insights, setInsights] = useState(null);
-            const [loadingInsights, setLoadingInsights] = useState(false);
-            
-            const [isChatOpen, setIsChatOpen] = useState(false);
-            const [chatInput, setChatInput] = useState("");
-            const [chatMessages, setChatMessages] = useState([{ role: 'model', content: 'สวัสดีครับ! โค้ช AI ยินดีให้คำปรึกษา วันนี้มีเป้าหมายอะไรให้ผมช่วยไหมครับ? 💪' }]);
-            const [isChatting, setIsChatting] = useState(false);
-
-            const [localApiKey, setLocalApiKey] = useState(localStorage.getItem('qwenApiKey') || "sk-f7ca662bbab4484b9fcac11fff166ae3");
-            const [showSettings, setShowSettings] = useState(false);
+            // โหมดกรอกแคลอรีเอง (กรณีค้นหาไม่เจอทั้ง Local และ Web)
+            const [manualEntryMode, setManualEntryMode] = useState(false);
+            const [manualData, setManualData] = useState({ calories: '', protein: '', carbs: '', fat: '' });
 
             const getGreeting = () => {
                 const hour = new Date().getHours();
@@ -149,10 +171,7 @@
             };
 
             useEffect(() => {
-                const timer = setTimeout(() => {
-                    setSplashStep('finished');
-                    if (!localApiKey) setShowSettings(true);
-                }, 2500);
+                const timer = setTimeout(() => setSplashStep('finished'), 2000);
                 const checkSDK = setInterval(() => { if (window.FirebaseSDK) { setIsSDKReady(true); clearInterval(checkSDK); } }, 100);
                 return () => { clearTimeout(timer); clearInterval(checkSDK); };
             }, []);
@@ -177,12 +196,8 @@
                     if (snap.exists()) {
                         setProfile(snap.data());
                         setFormData({ 
-                            gender: snap.data().gender || 'male', 
-                            age: snap.data().age || '', 
-                            weight: snap.data().weight || '', 
-                            height: snap.data().height || '', 
-                            activity: snap.data().activity || '1.2',
-                            goal: snap.data().goal || 'maintain'
+                            gender: snap.data().gender || 'male', age: snap.data().age || '', weight: snap.data().weight || '', 
+                            height: snap.data().height || '', activity: snap.data().activity || '1.2', goal: snap.data().goal || 'maintain'
                         });
                         setStep('dashboard');
                     } else setStep('onboarding');
@@ -190,8 +205,7 @@
 
                 const unsubscribeMeals = onSnapshot(collection(db, 'artifacts', appIdStr, 'users', user.uid, 'meals'), (snapshot) => {
                     const todayStr = new Date().toDateString();
-                    const filtered = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-                        .filter(m => m.timestamp && m.timestamp.toDate().toDateString() === todayStr);
+                    const filtered = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.timestamp && m.timestamp.toDate().toDateString() === todayStr);
                     setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
                 });
 
@@ -202,7 +216,6 @@
                 return () => { unsubscribeMeals(); unsubscribeWater(); };
             }, [user, isSDKReady]);
 
-            // อัปเกรดระบบคำนวณเป้าหมาย (Goal Setting System)
             const calculateStats = (data) => {
                 const { gender, age, weight, height, activity, goal } = data;
                 const w = parseFloat(weight); const h = parseFloat(height); const a = parseInt(age); const act = parseFloat(activity);
@@ -212,29 +225,20 @@
                 const baseTdee = Math.round(bmr * act);
                 const bmi = (w / ((h / 100) ** 2)).toFixed(1);
 
-                // ปรับแคลอรีตามเป้าหมาย
                 let targetCalories = baseTdee;
-                if (goal === 'lose') targetCalories -= 400; // ลดไขมัน
-                else if (goal === 'gain') targetCalories += 300; // สร้างกล้ามเนื้อ
+                if (goal === 'lose') targetCalories -= 400; 
+                else if (goal === 'gain') targetCalories += 300; 
 
-                // แบ่งสัดส่วน Macro ตามเป้าหมาย
                 let proPct = 0.3, carbPct = 0.4, fatPct = 0.3;
-                if (goal === 'lose') { proPct = 0.4; carbPct = 0.3; fatPct = 0.3; } // High Pro, Low Carb
-                else if (goal === 'gain') { proPct = 0.35; carbPct = 0.45; fatPct = 0.2; } // High Carb, Low Fat
-
-                const targetPro = Math.round((targetCalories * proPct) / 4);
-                const targetCarb = Math.round((targetCalories * carbPct) / 4);
-                const targetFat = Math.round((targetCalories * fatPct) / 9);
+                if (goal === 'lose') { proPct = 0.4; carbPct = 0.3; fatPct = 0.3; } 
+                else if (goal === 'gain') { proPct = 0.35; carbPct = 0.45; fatPct = 0.2; } 
 
                 return { 
-                    bmr: Math.round(bmr), 
-                    tdee: baseTdee, 
-                    targetCalories, 
-                    targetPro, 
-                    targetCarb, 
-                    targetFat, 
-                    bmi, 
-                    goal 
+                    bmr: Math.round(bmr), tdee: baseTdee, targetCalories, 
+                    targetPro: Math.round((targetCalories * proPct) / 4), 
+                    targetCarb: Math.round((targetCalories * carbPct) / 4), 
+                    targetFat: Math.round((targetCalories * fatPct) / 9), 
+                    bmi, goal 
                 };
             };
 
@@ -258,39 +262,80 @@
                 setProfile(newProfile); setView('home');
             };
 
-            const saveApiKey = () => {
-                localStorage.setItem('qwenApiKey', localApiKey);
-                setShowSettings(false);
-            };
-
-            const callAIText = async (prompt) => {
-                if (!localApiKey) { setShowSettings(true); throw new Error("กรุณาตั้งค่า API Key ก่อนใช้งาน"); }
-                const res = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localApiKey}` },
-                    body: JSON.stringify({ model: "qwen-plus", messages: [{ role: "user", content: prompt }], temperature: 0.1 })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error.message || "การเชื่อมต่อขัดข้อง");
-                return JSON.parse(data.choices[0].message.content.replace(/```json|```/g, '').trim());
-            };
-
-            const handleAnalyzeFood = async (foodName) => {
-                const targetFood = foodName || foodInput;
-                if (!targetFood.trim()) return;
+            // 💡 ค้นหาข้อมูลแบบ Hybrid (Local -> Web API -> Manual)
+            const handleSearchFood = async (foodName) => {
+                const targetText = (foodName || foodInput).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').trim().toLowerCase(); // ลบ Emoji
+                if (!targetText) return;
                 
-                setLoading(true); setError(null);
+                setLoading(true); setError(null); setManualEntryMode(false);
+                
+                // ขั้นที่ 1: ค้นหาในฐานข้อมูลส่วนตัวก่อน (Local DB)
+                setLoadingText("กำลังค้นหาในฐานข้อมูล...");
+                const foundLocal = LOCAL_FOOD_DB.find(f => targetText.includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(targetText));
+                
+                if (foundLocal) {
+                    setTimeout(() => {
+                        setResult({ ...foundLocal });
+                        setView('result');
+                        setFoodInput("");
+                        setLoading(false);
+                    }, 400); // ดีเลย์นิดหน่อยให้ดูสมูท
+                    return;
+                }
+
+                // ขั้นที่ 2: ถ้าไม่เจอ ให้ดึงจากเว็บ API (Open Food Facts - ฟรี ไม่ต้องใช้ Key)
+                setLoadingText("กำลังค้นหาจากเครือข่ายเว็บทั่วโลก...");
                 try {
-                    const prompt = `ประเมินโภชนาการอาหาร: "${targetFood}". ตอบเป็น JSON เท่านั้น: { "food_name": "ชื่อเมนูไทย", "calories": จำนวนเต็มแคลอรี, "protein": จำนวนเต็ม(g), "carbs": จำนวนเต็ม(g), "fat": จำนวนเต็ม(g), "summary": "คำแนะนำสั้นๆ สไตล์โค้ช" }`;
-                    const parsed = await callAIText(prompt);
-                    setResult({
-                        food_name: parsed.food_name || targetFood, calories: parsed.calories || 0,
-                        protein: parsed.protein || 0, carbs: parsed.carbs || 0, fat: parsed.fat || 0,
-                        summary: parsed.summary || "ประเมินโดย AI"
-                    }); 
-                    setFoodInput(""); setView('result'); 
-                } catch (err) { setError(`วิเคราะห์ไม่สำเร็จ: โปรดระบุชื่ออาหารให้ชัดเจน`); } 
-                finally { setLoading(false); }
+                    const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(targetText)}&search_simple=1&action=process&json=1&page_size=1`);
+                    const data = await res.json();
+
+                    if (data.products && data.products.length > 0) {
+                        const product = data.products[0];
+                        // หาค่าแคลอรีต่อ 100g หรือต่อหน่วยบริโภค
+                        const cal = product.nutriments['energy-kcal_100g'] || product.nutriments['energy-kcal_serving'] || product.nutriments['energy-kcal'] || 0;
+
+                        if (cal > 0) {
+                            setResult({
+                                food_name: product.product_name_th || product.product_name_en || product.product_name || targetText,
+                                calories: Math.round(cal),
+                                protein: Math.round(product.nutriments['proteins_100g'] || product.nutriments['proteins_serving'] || 0),
+                                carbs: Math.round(product.nutriments['carbohydrates_100g'] || product.nutriments['carbohydrates_serving'] || 0),
+                                fat: Math.round(product.nutriments['fat_100g'] || product.nutriments['fat_serving'] || 0),
+                                summary: "ข้อมูลอ้างอิงจากฐานข้อมูลสากล (Open Food Facts)"
+                            });
+                            setView('result');
+                            setFoodInput("");
+                            setLoading(false);
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.error("Web fetch failed", err);
+                }
+
+                // ขั้นที่ 3: ไม่พบในเว็บอีก ให้เปิดหน้ากรอกข้อมูลเอง
+                setLoading(false);
+                setManualEntryMode(true);
+                setManualData({ calories: '', protein: '', carbs: '', fat: '' });
+            };
+
+            const handleSaveManualEntry = (e) => {
+                e.preventDefault();
+                const cal = parseInt(manualData.calories) || 0;
+                if(cal <= 0) {
+                    setError("กรุณาระบุจำนวนแคลอรีที่มากกว่า 0"); return;
+                }
+                setResult({
+                    food_name: foodInput,
+                    calories: cal,
+                    protein: parseInt(manualData.protein) || 0,
+                    carbs: parseInt(manualData.carbs) || 0,
+                    fat: parseInt(manualData.fat) || 0,
+                    summary: "เพิ่มข้อมูลโดยผู้ใช้งาน"
+                });
+                setView('result');
+                setFoodInput("");
+                setManualEntryMode(false);
             };
 
             const saveMeal = async () => {
@@ -309,18 +354,7 @@
                 } catch (err) { setError(`Water Error`); }
             };
 
-            const handleSendMessage = async () => {
-                if (!chatInput.trim()) return;
-                const newChat = [...chatMessages, { role: 'user', content: chatInput }];
-                setChatMessages(newChat); setChatInput(""); setIsChatting(true);
-                try {
-                    const parsed = await callAIText(`คุณคือเทรนเนอร์ส่วนตัว ข้อมูลผู้ใช้: เป้าหมาย=${profile?.goal}, แคลที่กิน=${consumedCal}/${profile?.targetCalories}. History: ${JSON.stringify(newChat)}. ตอบสั้น เป็นกันเอง Return JSON: { "reply": "..." }`);
-                    setChatMessages([...newChat, { role: 'model', content: parsed.reply }]);
-                } catch (err) { setChatMessages([...newChat, { role: 'model', content: `ขออภัย ระบบขัดข้องครับ` }]); } 
-                finally { setIsChatting(false); }
-            };
-
-            // ประมวลผลสารอาหาร & โค้ช
+            // ประมวลผลสารอาหาร & โค้ชอัจฉริยะ (Rule-based)
             const consumedCal = dailyLog.reduce((s, m) => s + (m.calories || 0), 0);
             const consumedPro = dailyLog.reduce((s, m) => s + (m.protein || 0), 0);
             const consumedCarb = dailyLog.reduce((s, m) => s + (m.carbs || 0), 0);
@@ -333,7 +367,6 @@
             
             const progressCal = Math.min((consumedCal / targetCal) * 100, 100);
 
-            // 💡 Smart Trainer Logic
             const getTrainerTip = () => {
                 if (!profile) return "ระบุเป้าหมายในโปรไฟล์ เพื่อให้โค้ชแนะนำได้ตรงจุดครับ";
                 if (consumedCal === 0) return "เริ่มต้นวันใหม่! อย่าลืมทานมื้อเช้าเพื่อเติมพลังงานนะครับ 🍳";
@@ -341,19 +374,19 @@
                 const remCal = targetCal - consumedCal;
                 const remPro = targetPro - consumedPro;
 
-                if (remCal < 0) return "🔥 แคลอรีเกินเป้าหมายแล้ว! ไม่เป็นไรครับ พรุ่งนี้ค่อยลุยกันใหม่";
-                if (remCal < 200) return `⚠️ แคลอรีใกล้เต็ม (เหลือ ${remCal} kcal) มื้อต่อไปเน้นผักและน้ำเปล่านะครับ`;
-                if (remPro > (targetPro * 0.4)) return `💪 โปรตีนยังขาดอีก ${remPro}g มื้อหน้าจัดเนื้อสัตว์ อกไก่ หรือไข่เพิ่มหน่อยครับ!`;
+                if (remCal < 0) return "🔥 แคลอรีเกินเป้าหมายแล้ว! ไม่เป็นไรครับ พรุ่งนี้ค่อยลุยกันใหม่ ควบคุมสติให้ดี!";
+                if (remCal < 300) return `⚠️ แคลอรีใกล้เต็มแล้ว (เหลือ ${remCal} kcal) มื้อต่อไปเน้นโปรตีนล้วน ผัก และน้ำเปล่านะครับ`;
+                if (remPro > (targetPro * 0.5)) return `💪 โปรตีนยังขาดอีกเยอะเลย (${remPro}g) มื้อหน้าจัดเนื้อสัตว์ อกไก่ หรือไข่เพิ่มหน่อยครับ!`;
                 if (consumedCarb > targetCarb) return `🍚 กินคาร์บเยอะไปนิดนึงแล้ว มื้อต่อไปพยายามลดแป้งและน้ำตาลลงนะครับ`;
                 
-                return "🎯 ยอดเยี่ยม! รักษาสัดส่วนการกินแบบนี้ไว้ กำลังไปได้สวยเลยครับ";
+                return "🎯 ยอดเยี่ยม! รักษาสัดส่วนการกินแบบนี้ไว้ กำลังไปได้สวยเลยครับ ลุยต่อ!";
             };
 
             // --- UI Rendering ---
             if (splashStep !== 'finished') return (
                 <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#fafaf9]">
                     <dotlottie-wc src="https://lottie.host/78ddc33b-4844-4fc1-873e-7b41c27384ff/iKB3yDnm5e.lottie" style={{ width: '250px', height: '250px' }} autoplay loop />
-                    <p className="text-stone-500 font-medium text-sm tracking-widest uppercase mt-4 animate-pulse">Loading AI Coach...</p>
+                    <p className="text-stone-500 font-medium text-sm tracking-widest uppercase mt-4 animate-pulse">Loading System...</p>
                 </div>
             );
 
@@ -362,7 +395,7 @@
                     <div className="minimal-card p-10 max-w-sm w-full animate-in">
                         <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center text-stone-800 mx-auto mb-6"><Icon name="Activity" size={28} /></div>
                         <h1 className="text-2xl font-bold text-stone-900 mb-3">จดแคล & โค้ชส่วนตัว</h1>
-                        <p className="text-stone-500 text-sm mb-10 leading-relaxed">พิมพ์ชื่ออาหาร ให้ AI คำนวณสารอาหาร พร้อมโค้ชคอยเตือนคุณทุกมื้อ</p>
+                        <p className="text-stone-500 text-sm mb-10 leading-relaxed">พิมพ์ค้นหาเมนู ดึงข้อมูลอัตโนมัติ พร้อมรับคำแนะนำโภชนาการแบบทันที</p>
                         <button onClick={() => setStep('checking')} className="w-full btn-primary py-4 font-semibold text-[15px] flex items-center justify-center space-x-2">
                             <span>เริ่มต้นใช้งาน</span><Icon name="ArrowRight" size={18} />
                         </button>
@@ -406,22 +439,6 @@
 
             return (
                 <div className="min-h-screen pb-32 max-w-md mx-auto bg-[#fafaf9]">
-                    
-                    {/* Settings Modal */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-stone-900/20 backdrop-blur-sm p-6">
-                            <div className="minimal-card p-8 w-full max-w-sm animate-in">
-                                <h2 className="text-lg font-bold mb-2 text-stone-900">ตั้งค่า AI (API Key)</h2>
-                                <p className="text-xs text-stone-500 mb-6">ใส่ Key ของคุณเพื่อใช้งานระบบ (บันทึกในเครื่อง)</p>
-                                <input type="password" value={localApiKey} onChange={e => setLocalApiKey(e.target.value)} placeholder="sk-..." className="w-full bg-stone-50 border border-stone-200 p-4 rounded-xl text-sm outline-none focus:border-stone-400 mb-6" />
-                                <div className="flex space-x-3">
-                                    <button onClick={() => setShowSettings(false)} className="flex-1 bg-stone-100 py-3 rounded-xl font-semibold text-sm text-stone-600">ปิด</button>
-                                    <button onClick={() => { localStorage.setItem('qwenApiKey', localApiKey); setShowSettings(false); }} className="flex-[2] btn-primary py-3 font-semibold text-sm">บันทึก</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     <header className="px-6 pt-10 pb-4">
                         <div className="flex justify-between items-center mb-6">
                             <div>
@@ -430,7 +447,6 @@
                                     <span>สมุดบันทึกสุขภาพ</span>
                                 </h2>
                             </div>
-                            <button onClick={() => setShowSettings(true)} className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 hover:bg-stone-200 transition-colors"><Icon name="Settings" size={18}/></button>
                         </div>
 
                         {/* Smart Trainer Alert */}
@@ -464,30 +480,54 @@
                     </header>
 
                     <main className="px-6 space-y-6">
-                        {error && (<div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs flex items-start gap-2 animate-in"><Icon name="AlertCircle" size={16} className="mt-0.5 flex-shrink-0" /><span>{error}</span></div>)}
+                        {error && (<div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs flex items-start gap-2 animate-in"><Icon name="AlertCircle" size={16} className="mt-0.5 flex-shrink-0" /><span>{error}</span><button onClick={() => setError(null)} className="ml-auto"><Icon name="X" size={14}/></button></div>)}
                         
                         {view === 'home' && (
                             <>
-                                {/* Modern Search / Add Input */}
-                                <div className="minimal-card p-2 flex items-center shadow-sm border border-stone-100">
-                                    <div className="pl-4 pr-2 text-stone-400"><Icon name="Plus" size={20}/></div>
-                                    <input type="text" value={foodInput} onChange={e => setFoodInput(e.target.value)} placeholder="พิมพ์ชื่อเมนูอาหารที่นี่..." className="flex-1 bg-transparent py-3 text-sm outline-none text-stone-800 font-medium" onKeyDown={e => e.key === 'Enter' && handleAnalyzeFood()} />
-                                    <button onClick={() => handleAnalyzeFood()} disabled={loading || !foodInput.trim()} className="bg-teal-600 text-white p-3 rounded-xl disabled:opacity-50 transition-all shadow-sm">
-                                        {loading ? <Icon name="RefreshCw" size={18} className="animate-spin" /> : <Icon name="Send" size={18} />}
+                                {/* Search Input */}
+                                <div className="minimal-card p-2 flex items-center shadow-sm border border-stone-100 relative">
+                                    <div className="pl-4 pr-2 text-stone-400"><Icon name={loading ? "RefreshCw" : "Search"} size={20} className={loading ? "animate-spin" : ""} /></div>
+                                    <input type="text" value={foodInput} onChange={e => setFoodInput(e.target.value)} placeholder="ค้นหาเมนูอาหาร หรือสแกนชื่อสินค้า..." className="flex-1 bg-transparent py-3 text-sm outline-none text-stone-800 font-medium" onKeyDown={e => e.key === 'Enter' && handleSearchFood()} disabled={loading} />
+                                    <button onClick={() => handleSearchFood()} disabled={loading || !foodInput.trim()} className="bg-stone-900 text-white p-3 rounded-xl disabled:opacity-50 transition-all shadow-sm">
+                                        ค้นหา
                                     </button>
+                                    {/* Loading Tooltip */}
+                                    {loading && <div className="absolute -top-10 right-0 bg-stone-800 text-white text-[10px] px-3 py-1.5 rounded-lg animate-pulse">{loadingText}</div>}
                                 </div>
 
-                                {/* Quick Emoji Tags (Scrollable) */}
+                                {/* Quick Emoji Tags */}
                                 <div>
-                                    <h3 className="text-xs font-semibold text-stone-400 mb-3 px-1 uppercase tracking-wide">คีย์ลัดเมนูฮิต</h3>
+                                    <h3 className="text-xs font-semibold text-stone-400 mb-3 px-1 uppercase tracking-wide">เมนูยอดฮิต</h3>
                                     <div className="flex overflow-x-auto chip-scroll gap-2 pb-2">
                                         {QUICK_TAGS.map((tag) => (
-                                            <button key={tag} onClick={() => { setFoodInput(tag); handleAnalyzeFood(tag); }} className="whitespace-nowrap bg-white border border-stone-200 px-4 py-2 rounded-full text-sm font-medium text-stone-600 shadow-sm active:scale-95 transition-all hover:border-stone-300">
+                                            <button key={tag} onClick={() => { setFoodInput(tag); handleSearchFood(tag); }} disabled={loading} className="whitespace-nowrap bg-white border border-stone-200 px-4 py-2 rounded-full text-sm font-medium text-stone-600 shadow-sm active:scale-95 transition-all hover:border-stone-300 disabled:opacity-50">
                                                 {tag}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Manual Entry Overlay */}
+                                {manualEntryMode && (
+                                    <div className="minimal-card p-6 border-2 border-teal-100 bg-teal-50/30 animate-in">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 className="font-bold text-stone-800 text-base">ไม่พบ "{foodInput}" ในระบบ</h3>
+                                                <p className="text-xs text-stone-500 mt-1">กรุณาระบุข้อมูลโภชนาการด้วยตนเอง</p>
+                                            </div>
+                                            <button onClick={() => setManualEntryMode(false)} className="text-stone-400 hover:text-stone-600"><Icon name="X" size={20}/></button>
+                                        </div>
+                                        <form onSubmit={handleSaveManualEntry} className="space-y-4">
+                                            <Input label="แคลอรี (kcal) *" value={manualData.calories} onChange={v => setManualData({...manualData, calories: v})} />
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <Input label="โปรตีน (g)" value={manualData.protein} onChange={v => setManualData({...manualData, protein: v})} />
+                                                <Input label="คาร์บ (g)" value={manualData.carbs} onChange={v => setManualData({...manualData, carbs: v})} />
+                                                <Input label="ไขมัน (g)" value={manualData.fat} onChange={v => setManualData({...manualData, fat: v})} />
+                                            </div>
+                                            <button type="submit" disabled={!manualData.calories} className="w-full btn-primary py-3 font-semibold text-sm">เพิ่มข้อมูลนี้</button>
+                                        </form>
+                                    </div>
+                                )}
                                 
                                 {/* Timeline History */}
                                 <div>
@@ -499,7 +539,7 @@
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-full bg-stone-50 flex items-center justify-center text-stone-600 font-bold text-xs border border-stone-100">{m.mealType === 'Breakfast' ? 'เช้า' : m.mealType === 'Lunch' ? 'เที่ยง' : m.mealType === 'Dinner' ? 'เย็น' : 'ว่าง'}</div>
                                                         <div>
-                                                            <p className="font-semibold text-stone-800 text-sm">{m.food_name}</p>
+                                                            <p className="font-semibold text-stone-800 text-sm max-w-[150px] truncate">{m.food_name}</p>
                                                             <p className="text-[11px] text-stone-400 mt-0.5">{m.protein}p • {m.carbs}c • {m.fat}f</p>
                                                         </div>
                                                     </div>
@@ -517,7 +557,13 @@
 
                         {view === 'result' && result && (
                             <div className="minimal-card p-8 text-center animate-in">
-                                <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center text-teal-600 mx-auto mb-4"><Icon name="Sparkles" size={24}/></div>
+                                <div className="flex justify-start mb-4"><button onClick={() => setView('home')} className="text-stone-400 p-2"><Icon name="ChevronLeft"/></button></div>
+                                
+                                {/* ไอคอนบอกแหล่งที่มา (ถ้ามีคำว่าเว็บ ให้โชว์รูปลูกโลก) */}
+                                <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center text-teal-600 mx-auto mb-4">
+                                    {result.summary.includes("เว็บ") || result.summary.includes("Open Food") ? <Icon name="Globe" size={24}/> : <Icon name="Activity" size={24}/>}
+                                </div>
+
                                 <h2 className="text-xl font-bold text-stone-900 mb-1">{result.food_name}</h2>
                                 <p className="text-stone-500 text-xs mb-8">"{result.summary}"</p>
                                 
@@ -539,10 +585,7 @@
                                     </div>
                                 </div>
                                 
-                                <div className="flex gap-3">
-                                    <button onClick={() => setView('home')} className="flex-1 bg-stone-100 text-stone-600 py-4 rounded-2xl font-semibold text-sm transition-all active:scale-95">ยกเลิก</button>
-                                    <button onClick={saveMeal} className="flex-[2] bg-teal-600 text-white py-4 rounded-2xl font-semibold text-[15px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"><Icon name="CheckCircle2" size={18}/><span>บันทึกมื้อนี้</span></button>
-                                </div>
+                                <button onClick={saveMeal} className="w-full btn-primary py-4 font-semibold text-[15px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"><Icon name="CheckCircle2" size={18}/><span>ยืนยันการบันทึกมื้อนี้</span></button>
                             </div>
                         )}
 
@@ -572,31 +615,6 @@
                             </div>
                         )}
                     </main>
-
-                    {/* Chatbot Modal */}
-                    {isChatOpen && (
-                        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
-                            <div className="absolute inset-0 bg-stone-900/20 backdrop-blur-sm" onClick={() => setIsChatOpen(false)}></div>
-                            <div className="bg-white h-[75vh] rounded-t-[32px] shadow-2xl flex flex-col relative z-10 animate-in">
-                                <div className="flex justify-between items-center p-6 border-b border-stone-100">
-                                    <div className="flex items-center gap-3"><div className="bg-teal-50 text-teal-600 p-2.5 rounded-full"><Icon name="MessageCircle" size={20}/></div><h3 className="font-bold text-stone-800">AI เทรนเนอร์ส่วนตัว</h3></div>
-                                    <button onClick={() => setIsChatOpen(false)} className="p-2 bg-stone-50 rounded-full text-stone-400 hover:bg-stone-200 transition-colors"><Icon name="X" size={20}/></button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-stone-50/50">
-                                    {chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-4 rounded-[24px] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-teal-600 text-white rounded-tr-sm shadow-md' : 'bg-white border border-stone-100 text-stone-700 rounded-tl-sm shadow-sm'}`}>{msg.content}</div></div>))}
-                                    {isChatting && <div className="text-teal-500 flex items-center gap-2"><Icon name="RefreshCw" size={14} className="animate-spin"/><span className="text-xs font-medium">โค้ชกำลังพิมพ์...</span></div>}
-                                </div>
-                                <div className="p-5 bg-white border-t border-stone-100">
-                                    <div className="flex items-center bg-stone-50 p-2 rounded-2xl border border-stone-200">
-                                        <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="พิมพ์ถามปัญหาโภชนาการ..." className="flex-1 px-3 text-sm outline-none bg-transparent text-stone-800" onKeyDown={e => e.key === 'Enter' && handleSendMessage()} />
-                                        <button onClick={handleSendMessage} disabled={isChatting || !chatInput} className="bg-teal-600 text-white p-3 rounded-xl disabled:opacity-50 transition-all shadow-sm"><Icon name="Send" size={18}/></button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <button onClick={() => setIsChatOpen(true)} className="fixed bottom-28 right-6 w-14 h-14 bg-stone-900 text-white rounded-full flex items-center justify-center shadow-xl z-40 hover:scale-105 transition-transform"><Icon name="MessageCircle" size={24}/></button>
                     
                     {/* Bottom Navigation */}
                     <nav className="fixed bottom-6 left-6 right-6 minimal-nav h-16 rounded-full flex items-center justify-around px-2 z-50 shadow-sm border border-white">
@@ -608,8 +626,6 @@
         }
 
         // Sub-components
-        function Background() { return (<div className="fixed inset-0 z-[-1] overflow-hidden bg-[#fafaf9]"><div className="absolute top-[-10%] left-[-10%] w-[80vw] h-[80vw] rounded-full bg-teal-100/50 blur-[100px] animate-pulse"></div><div className="absolute bottom-[-10%] right-[-10%] w-[80vw] h-[80vw] rounded-full bg-rose-50/50 blur-[100px]"></div></div>); }
-        
         function Input({ label, value, onChange }) { return (<div className="space-y-1 text-left"><label className="text-[11px] font-semibold text-stone-400 uppercase tracking-widest ml-1">{label}</label><input required type="number" value={value} onChange={e => onChange(e.target.value)} className="w-full bg-stone-50 border border-stone-200 p-4 rounded-2xl text-sm outline-none focus:border-stone-400 focus:bg-white transition-all text-stone-800" /></div>); }
         
         function MacroBlock({ label, value, color }) { return (<div className="bg-stone-50 p-4 rounded-2xl border border-stone-100 flex flex-col items-center"><p className={`text-[10px] font-bold uppercase tracking-wider mb-1 text-stone-400`}>{label}</p><p className={`text-lg font-bold ${color}`}>{value}<span className="text-[10px] ml-0.5 opacity-60">g</span></p></div>); }

@@ -12,8 +12,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 
-// --- Firebase Configuration ---
-// ข้อมูลโปรเจกต์ nubcal-cbd69 ของคุณ
+// --- Firebase Configuration (อ้างอิงตามข้อมูลที่คุณส่งมา) ---
 const firebaseConfig = {
   apiKey: "AIzaSyCKSPlMznK713bLuSyR3b7Kj1BJcCuQeJI",
   authDomain: "nubcal-cbd69.firebaseapp.com",
@@ -24,13 +23,14 @@ const firebaseConfig = {
   measurementId: "G-4EHW3MLZ4G"
 };
 
+// ตรวจสอบการสร้าง Firebase Instance (ตามภาพที่ 2)
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'calorie-ai-pro-glass';
 
 export default function App() {
-  // --- สถานะหลักของแอป ---
+  // --- States ---
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [step, setStep] = useState('loading'); 
@@ -68,11 +68,11 @@ export default function App() {
   const [isChatting, setIsChatting] = useState(false);
 
   const fileInputRef = useRef(null);
-  const apiKey = ""; // Gemini API Key จะถูกจัดการโดยสภาพแวดล้อมอัตโนมัติ
+  const apiKey = ""; // API Key สำหรับ Gemini 2.5 Flash
 
-  // --- ระบบยืนยันตัวตนและการตั้งค่าเริ่มต้น ---
+  // --- ระบบยืนยันตัวตนและการฉีดฟอนต์ ---
   useEffect(() => {
-    // ฉีดฟอนต์ Kanit เพื่อความมินิมอล
+    // ฉีดฟอนต์ Kanit เพื่อความมินิมอลตามภาพที่ 3
     const fontLink = document.createElement('link');
     fontLink.href = "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap";
     fontLink.rel = "stylesheet";
@@ -80,13 +80,12 @@ export default function App() {
 
     const initAuth = async () => {
       try {
-        // แก้ไขข้อผิดพลาด custom-token-mismatch
-        // หากมี __initial_auth_token ให้ลองใช้ก่อน แต่ถ้าไม่ตรงกับ config ให้ใช้ Anonymous แทน
+        // จัดการกรณี custom-token-mismatch สำหรับการรันบน Firebase ของคุณเอง
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           try {
             await signInWithCustomToken(auth, __initial_auth_token);
           } catch (tokenErr) {
-            console.warn("Custom token mismatch, falling back to anonymous sign-in.");
+            console.warn("Token mismatch, switching to anonymous sign-in");
             await signInAnonymously(auth);
           }
         } else {
@@ -94,7 +93,6 @@ export default function App() {
         }
       } catch (err) { 
         console.error("Auth error:", err);
-        setError("ไม่สามารถเชื่อมต่อกับระบบสมาชิกได้ โปรดตรวจสอบการตั้งค่า Firebase ของคุณ");
       }
     };
     initAuth();
@@ -102,7 +100,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- การดึงข้อมูลโปรไฟล์และกิจกรรมรายวัน ---
+  // --- การดึงข้อมูลจาก Cloud Firestore ---
   useEffect(() => {
     if (!user) return;
 
@@ -117,7 +115,7 @@ export default function App() {
             age: data.age,
             weight: data.weight,
             height: data.height,
-            activity: data.activity
+            activity: data.activity || '1.2'
         });
         setStep('dashboard');
       } else { setStep('onboarding'); }
@@ -134,7 +132,7 @@ export default function App() {
         return d.toDateString() === today;
       });
       setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
-    }, (err) => console.error("Snapshot error:", err));
+    });
 
     const todayStr = new Date().toLocaleDateString('en-CA'); 
     const waterRef = doc(db, 'artifacts', appId, 'users', user.uid, 'water', todayStr);
@@ -146,14 +144,22 @@ export default function App() {
     return () => { unsubscribeMeals(); unsubscribeWater(); };
   }, [user]);
 
-  // --- ฟังก์ชันคำนวณและจัดการข้อมูล ---
+  // --- ตรรกะการคำนวณและจัดการข้อมูล ---
   const calculateStats = (data) => {
     const { gender, age, weight, height, activity } = data;
+    const w = parseFloat(weight);
+    const h = parseFloat(height);
+    const a = parseInt(age);
+    const act = parseFloat(activity);
+
+    if (isNaN(w) || isNaN(h) || isNaN(a)) return { bmr: 0, tdee: 0, bmi: 0 };
+
     let bmr = gender === 'male' 
-      ? (10 * weight) + (6.25 * height) - (5 * age) + 5
-      : (10 * weight) + (6.25 * height) - (5 * age) - 161;
-    const tdee = Math.round(bmr * parseFloat(activity));
-    const bmi = (weight / ((height / 100) ** 2)).toFixed(1);
+      ? (10 * w) + (6.25 * h) - (5 * a) + 5
+      : (10 * w) + (6.25 * h) - (5 * a) - 161;
+    
+    const tdee = Math.round(bmr * act);
+    const bmi = (w / ((h / 100) ** 2)).toFixed(1);
     return { bmr: Math.round(bmr), tdee, bmi };
   };
 
@@ -204,8 +210,8 @@ export default function App() {
       const reader = new FileReader();
       const base64 = await new Promise(r => { reader.onload = () => r(reader.result.split(',')[1]); reader.readAsDataURL(image); });
       const prompt = scanMode === 'label'
-        ? `วิเคราะห์ภาพฉลากโภชนาการนี้และตอบเป็น JSON: { "food_name": "ชื่อสินค้า", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "สรุปสั้นๆ" }`
-        : `วิเคราะห์ภาพอาหารนี้และตอบเป็น JSON: { "food_name": "ชื่ออาหาร", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." } แยกภาชนะออกให้ชัดเจน ${userHint ? `เพิ่มเติม: ${userHint}` : ''}`;
+        ? `วิเคราะห์ฉลากโภชนาการนี้และตอบเป็น JSON: { "food_name": "...", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." }`
+        : `วิเคราะห์อาหารนี้และตอบเป็น JSON: { "food_name": "...", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." } คำนึงถึงสีภาชนะและปริมาตร ${userHint ? `ข้อมูลเสริม: ${userHint}` : ''}`;
       const parsed = await callGemini(prompt, image.type, base64);
       setResult(parsed); setView('result');
     } catch (err) { setError("วิเคราะห์ล้มเหลว กรุณาลองใหม่"); }
@@ -216,10 +222,10 @@ export default function App() {
     if (!textLog.trim()) return;
     setLoadingTextLog(true);
     try {
-      const prompt = `แปลงข้อความเป็นข้อมูลโภชนาการ: "${textLog}" ตอบกลับเป็น JSON: { "food_name": "...", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." }`;
+      const prompt = `แปลงข้อความเป็นสารอาหาร: "${textLog}" JSON: { "food_name": "...", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." }`;
       const parsed = await callGemini(prompt);
       setResult(parsed); setView('result'); setTextLog("");
-    } catch (err) { setError("ไม่สามารถประมวลผลข้อความได้"); }
+    } catch (err) { setError("ประมวลผลข้อความล้มเหลว"); }
     finally { setLoadingTextLog(false); }
   };
 
@@ -234,8 +240,8 @@ export default function App() {
   const handleGetInsights = async () => {
     setLoadingInsights(true);
     try {
-      const logStr = dailyLog.map(m => `${m.food_name}(${m.calories}kcal)`).join(', ');
-      const prompt = `วิเคราะห์การกินวันนี้: ${logStr} (เป้าหมาย ${profile?.tdee}kcal) ตอบเป็น JSON: { "insight": "...", "suggestion": "...", "score": int }`;
+      const logStr = dailyLog.map(m => `${m.food_name}(${m.calories})`).join(', ');
+      const prompt = `วิเคราะห์การกิน: ${logStr} (TDEE: ${profile?.tdee}) JSON: { "insight": "...", "suggestion": "...", "score": int }`;
       const parsed = await callGemini(prompt);
       setInsights(parsed);
     } catch (err) { console.error(err); }
@@ -247,17 +253,17 @@ export default function App() {
     const newChat = [...chatMessages, { role: 'user', content: chatInput }];
     setChatMessages(newChat); setChatInput(""); setIsChatting(true);
     try {
-      const prompt = `คุณคือ AI โค้ช ประวัติแชท: ${JSON.stringify(newChat)} ตอบสั้นๆ (JSON: { "reply": "..." })`;
+      const prompt = `คุณคือโค้ชโภชนาการ แชท: ${JSON.stringify(newChat)} ตอบสั้นๆ มินิมอล (JSON: { "reply": "..." })`;
       const parsed = await callGemini(prompt);
       setChatMessages([...newChat, { role: 'model', content: parsed.reply }]);
-    } catch (err) { setChatMessages([...newChat, { role: 'model', content: "ขออภัยครับ ระบบขัดข้อง" }]); }
+    } catch (err) { setChatMessages([...newChat, { role: 'model', content: "ระบบขัดข้องชั่วคราว" }]); }
     finally { setIsChatting(false); }
   };
 
   const consumed = dailyLog.reduce((s, m) => s + (m.calories || 0), 0);
   const progress = profile ? Math.min((consumed / profile.tdee) * 100, 100) : 0;
 
-  // --- UI Components ---
+  // --- UI Layout ---
   const GlassBackground = () => (
     <div className="fixed inset-0 z-[-1] overflow-hidden bg-slate-50" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-emerald-200/50 blur-[100px] animate-pulse"></div>
@@ -275,13 +281,11 @@ export default function App() {
   if (step === 'onboarding') return (
     <div className="min-h-screen relative p-6 flex flex-col justify-center max-w-md mx-auto" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <GlassBackground />
-      <div className="bg-white/60 backdrop-blur-2xl border border-white/80 shadow-2xl p-8 rounded-[40px]">
+      <div className="bg-white/60 backdrop-blur-2xl border border-white/80 shadow-2xl p-8 rounded-[40px] text-left">
         <div className="mb-8 text-center">
-          <div className="w-16 h-16 bg-teal-500 mx-auto rounded-3xl flex items-center justify-center text-white shadow-lg mb-4">
-            <Activity size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">เริ่มดูแลสุขภาพ</h1>
-          <p className="text-slate-500 text-sm">ระบุข้อมูลเพื่อคำนวณแคลอรี่เป้าหมาย</p>
+          <div className="w-16 h-16 bg-teal-500 mx-auto rounded-3xl flex items-center justify-center text-white shadow-lg mb-4"><Activity size={32} /></div>
+          <h1 className="text-2xl font-bold text-slate-900">ระบุข้อมูลของคุณ</h1>
+          <p className="text-slate-500 text-sm">เพื่อคำนวณเป้าหมายแคลอรี่รายวัน</p>
         </div>
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="flex bg-white/40 p-1 rounded-2xl border border-white/50">
@@ -297,7 +301,18 @@ export default function App() {
             <GlassInput label="ส่วนสูง (ซม.)" value={formData.height} onChange={v => setFormData({...formData, height: v})} />
           </div>
           <GlassInput label="อายุ (ปี)" value={formData.age} onChange={v => setFormData({...formData, age: v})} />
-          <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl mt-4">บันทึกข้อมูล</button>
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">ระดับกิจกรรม</label>
+            <select value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} 
+              className="w-full bg-white/60 border border-white p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 outline-none text-slate-800 appearance-none shadow-sm">
+              <option value="1.2">นั่งทำงานเป็นส่วนใหญ่</option>
+              <option value="1.375">ออกกำลังกายเบา (1-3 วัน/สัปดาห์)</option>
+              <option value="1.55">ออกกำลังกายปานกลาง (3-5 วัน/สัปดาห์)</option>
+              <option value="1.725">ออกกำลังกายหนัก (6-7 วัน/สัปดาห์)</option>
+              <option value="1.9">ออกกำลังกายหนักมาก</option>
+            </select>
+          </div>
+          <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl mt-4">บันทึกและเริ่มใช้งาน</button>
         </form>
       </div>
     </div>
@@ -308,17 +323,17 @@ export default function App() {
       <GlassBackground />
       
       <header className="bg-white/40 backdrop-blur-xl px-8 pt-12 pb-8 rounded-b-[48px] border-b border-white/60 shadow-sm relative z-20">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 text-left">
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setView('profile')}>
             <div className="w-11 h-11 bg-white border border-white/80 rounded-2xl flex items-center justify-center text-teal-600 shadow-sm"><User size={20}/></div>
             <div>
-              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider flex items-center">แก้ไขโปรไฟล์ <Edit3 size={10} className="ml-1 opacity-50"/></p>
-              <p className="text-sm font-bold">BMI: {profile?.bmi}</p>
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider flex items-center">แก้ไขข้อมูล <Edit3 size={10} className="ml-1 opacity-50"/></p>
+              <p className="text-sm font-bold text-slate-800">BMI: {profile?.bmi || '-'}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">TDEE Goal</p>
-            <p className="text-sm font-bold text-slate-800">{profile?.tdee} kcal</p>
+            <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">เป้าหมาย TDEE</p>
+            <p className="text-sm font-bold text-slate-800">{profile?.tdee || 0} kcal</p>
           </div>
         </div>
 
@@ -332,64 +347,57 @@ export default function App() {
             </svg>
             <div className="absolute text-center bg-white/40 backdrop-blur-md rounded-full w-36 h-36 flex flex-col items-center justify-center border border-white/50 shadow-inner">
                 <p className="text-5xl font-black text-slate-800">{consumed}</p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">Eaten</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Kcal Eaten</p>
             </div>
           </div>
         </div>
       </header>
 
       <main className="px-6 mt-6 relative z-10">
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-sm flex items-start gap-2">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+        {error && <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-2xl text-sm text-left">{error}</div>}
 
         {view === 'home' && (
           <div className="space-y-6">
             <div className="bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 p-3 shadow-sm flex items-center space-x-3">
               <input type="text" value={textLog} onChange={e => setTextLog(e.target.value)}
-                placeholder="กินอะไรไป? พิมพ์บอกที่นี่..."
-                className="flex-1 bg-transparent text-sm outline-none px-2"
+                placeholder="วันนี้กินอะไรไป พิมพ์บอกได้เลย..."
+                className="flex-1 bg-transparent text-sm outline-none px-2 text-slate-800"
                 onKeyDown={e => e.key === 'Enter' && handleTextLog()}
               />
-              <button onClick={handleTextLog} className="p-2 bg-teal-500 text-white rounded-full shadow-md active:scale-90" disabled={loadingTextLog}>
+              <button onClick={handleTextLog} className="p-2 bg-teal-500 text-white rounded-full shadow-md active:scale-95" disabled={loadingTextLog}>
                 {loadingTextLog ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             </div>
 
             <div onClick={() => { setImagePreview(null); setView('camera'); fileInputRef.current.click(); }} 
-              className="bg-white/60 backdrop-blur-lg p-6 rounded-[32px] border border-white/80 shadow flex items-center justify-between cursor-pointer active:scale-95 transition-all">
+              className="bg-white/60 backdrop-blur-lg p-6 rounded-[32px] border border-white/80 shadow flex items-center justify-between cursor-pointer active:scale-95 transition-all text-left">
               <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 bg-teal-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                  <Camera size={26} />
-                </div>
-                <div><h3 className="font-bold text-lg">สแกนอาหาร</h3><p className="text-xs text-slate-500">ถ่ายรูปเพื่อคำนวณแคลอรี่</p></div>
+                <div className="w-14 h-14 bg-teal-500 rounded-2xl flex items-center justify-center text-white shadow-lg"><Camera size={26} /></div>
+                <div><h3 className="font-bold text-lg text-slate-800">สแกนอาหาร</h3><p className="text-xs text-slate-500">ถ่ายรูปด้วยกล้องมือถือ</p></div>
               </div>
               <Plus size={24} className="text-teal-600"/>
             </div>
 
-            <div className="bg-blue-50/60 backdrop-blur-xl rounded-[32px] border border-blue-100/50 p-6 flex items-center justify-between shadow-sm">
+            <div className="bg-blue-50/60 backdrop-blur-xl rounded-[32px] border border-blue-100/50 p-6 flex items-center justify-between shadow-sm text-left">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-500 shadow-sm"><Droplets size={24} /></div>
-                <div><h3 className="font-bold text-sm">ดื่มน้ำวันนี้</h3><p className="text-xs text-slate-500">{waterIntake} / 8 แก้ว</p></div>
+                <div><h3 className="font-bold text-sm text-slate-800">ดื่มน้ำ</h3><p className="text-xs text-slate-500">{waterIntake} / 8 แก้ว</p></div>
               </div>
               <div className="flex space-x-2">
                 <button onClick={() => handleAddWater(-1)} className="w-8 h-8 rounded-full bg-white text-blue-500 font-bold">-</button>
-                <button onClick={() => handleAddWater(1)} className="w-10 h-10 rounded-full bg-blue-500 text-white font-bold">+</button>
+                <button onClick={() => handleAddWater(1)} className="w-10 h-10 rounded-full bg-blue-500 text-white font-bold shadow-md">+</button>
               </div>
             </div>
 
-            <div className="bg-white/40 backdrop-blur-xl rounded-[36px] border border-white/60 p-6">
-              <h3 className="text-base font-bold flex items-center space-x-2 mb-4"><History size={18} className="text-teal-600"/><span>ประวัติวันนี้</span></h3>
+            <div className="bg-white/40 backdrop-blur-xl rounded-[36px] border border-white/60 p-6 text-left">
+              <h3 className="text-base font-bold flex items-center space-x-2 mb-4 text-slate-800"><History size={18} className="text-teal-600"/><span>รายการวันนี้</span></h3>
               <div className="space-y-3">
-                {dailyLog.length === 0 ? <p className="text-center text-slate-400 py-4 text-xs tracking-wider uppercase">ยังไม่มีรายการวันนี้</p> :
+                {dailyLog.length === 0 ? <p className="text-center text-slate-400 py-4 text-xs tracking-widest uppercase">ไม่มีข้อมูล</p> :
                   dailyLog.map(m => (
                     <div key={m.id} className="bg-white/60 p-4 rounded-2xl border border-white/80 flex items-center justify-between shadow-sm">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs shadow-sm">{m.mealType?.[0]}</div>
-                        <div><p className="font-bold text-sm">{m.food_name}</p><p className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">{m.mealType} • {m.calories} kcal</p></div>
+                        <div><p className="font-bold text-sm text-slate-800">{m.food_name}</p><p className="text-[10px] text-slate-500 font-bold">{m.mealType} • {m.calories} kcal</p></div>
                       </div>
                     </div>
                   ))
@@ -402,8 +410,8 @@ export default function App() {
         {view === 'camera' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-8">
             <div className="flex bg-white/40 p-1 rounded-2xl border border-white/60 mx-auto w-3/4">
-              <button onClick={() => setScanMode('food')} className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${scanMode === 'food' ? 'bg-white shadow text-teal-600' : 'text-slate-400'}`}>เมนูอาหาร</button>
-              <button onClick={() => setScanMode('label')} className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${scanMode === 'label' ? 'bg-white shadow text-teal-600' : 'text-slate-400'}`}>ฉลากโภชนาการ</button>
+              <button onClick={() => setScanMode('food')} className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${scanMode === 'food' ? 'bg-white shadow text-teal-600' : 'text-slate-400'}`}>อาหาร</button>
+              <button onClick={() => setScanMode('label')} className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${scanMode === 'label' ? 'bg-white shadow text-teal-600' : 'text-slate-400'}`}>ฉลาก</button>
             </div>
             {imagePreview && (
               <div className="rounded-[40px] overflow-hidden shadow-2xl aspect-[4/5] relative border-4 border-white/50 bg-black">
@@ -413,21 +421,21 @@ export default function App() {
             )}
             <button onClick={handleAnalyze} disabled={loading} className="w-full bg-slate-900 text-white py-5 rounded-[24px] font-bold text-lg shadow-xl active:scale-95 disabled:opacity-50">
               {loading ? <RefreshCw className="animate-spin inline mr-2" /> : <Activity className="inline mr-2" />}
-              <span>{loading ? 'กำลังวิเคราะห์...' : 'เริ่มวิเคราะห์ข้อมูล'}</span>
+              <span>{loading ? 'กำลังวิเคราะห์...' : 'วิเคราะห์ข้อมูล'}</span>
             </button>
           </div>
         )}
 
         {view === 'result' && result && (
-          <div className="animate-in fade-in duration-500">
+          <div className="animate-in fade-in duration-500 text-left">
             <div className="bg-white/60 backdrop-blur-2xl p-8 rounded-[40px] border border-white/80 text-center shadow-xl">
-              <h2 className="text-2xl font-black mb-1">{result.food_name}</h2>
+              <h2 className="text-2xl font-black mb-1 text-slate-800">{result.food_name}</h2>
               <p className="text-slate-500 text-xs mb-8">{result.summary}</p>
               <div className="inline-flex flex-col bg-emerald-500 text-white px-8 py-5 rounded-[32px] shadow-lg mb-8">
                 <span className="text-5xl font-black">{result.calories}</span>
                 <span className="text-[10px] uppercase font-bold mt-1">kcal</span>
               </div>
-              <div className="grid grid-cols-3 gap-3 mb-8">
+              <div className="grid grid-cols-3 gap-3 mb-8 text-center">
                 <GlassMacroCard label="Protein" value={result.protein} color="text-sky-600" />
                 <GlassMacroCard label="Carbs" value={result.carbs} color="text-fuchsia-600" />
                 <GlassMacroCard label="Fat" value={result.fat} color="text-amber-600" />
@@ -437,43 +445,33 @@ export default function App() {
                   <button key={type} onClick={() => setMealType(type)} className={`py-3 rounded-xl font-bold text-xs border ${mealType === type ? 'bg-teal-500 text-white border-teal-400' : 'bg-white/50 text-slate-400'}`}>{type}</button>
                 ))}
               </div>
-              <button onClick={saveMeal} className="w-full bg-slate-800 text-white py-5 rounded-[24px] font-bold text-lg shadow-xl"><CheckCircle2 className="inline mr-2"/>บันทึกมื้อนี้</button>
+              <button onClick={saveMeal} className="w-full bg-slate-800 text-white py-5 rounded-[24px] font-bold text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center space-x-2"><CheckCircle2/><span>บันทึกมื้ออาหาร</span></button>
             </div>
           </div>
         )}
 
         {view === 'history' && (
-          <div className="space-y-6">
+          <div className="space-y-6 text-left">
             <div className="bg-white/60 backdrop-blur-xl rounded-[36px] border border-white/60 p-6 shadow-sm">
-              <h3 className="font-bold flex items-center space-x-2 text-slate-800 mb-4"><Sparkles className="text-amber-500" size={20}/><span>AI Insight</span></h3>
+              <h3 className="font-bold flex items-center space-x-2 text-slate-800 mb-4"><Sparkles className="text-amber-500" size={20}/><span>AI สรุปสุขภาพ</span></h3>
               {!insights ? (
                 <button onClick={handleGetInsights} disabled={loadingInsights} className="w-full py-4 rounded-2xl bg-teal-500 text-white font-bold text-sm shadow active:scale-95 transition">
-                  {loadingInsights ? <RefreshCw className="animate-spin" size={18}/> : 'ดูบทสรุปวันนี้'}
+                  {loadingInsights ? <RefreshCw className="animate-spin" size={18}/> : 'วิเคราะห์พฤติกรรมวันนี้'}
                 </button>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-4"><div className="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-amber-500 font-black text-lg">{insights.score}</div><p className="font-bold text-xs uppercase tracking-widest text-slate-400">คะแนนสุขภาพ</p></div>
-                  <p className="bg-white/60 p-4 rounded-2xl text-sm leading-relaxed border border-white">"{insights.insight}"</p>
-                  <button onClick={() => setInsights(null)} className="text-[10px] w-full text-slate-300 font-bold uppercase mt-2">ปิด</button>
+                  <div className="flex items-center space-x-4"><div className="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-amber-500 font-black text-lg">{insights.score}</div><p className="font-bold text-[10px] uppercase tracking-widest text-slate-400">สุขภาพดีระดับนี้</p></div>
+                  <p className="bg-white/60 p-4 rounded-2xl text-sm leading-relaxed border border-white text-slate-700">"{insights.insight}"</p>
+                  <button onClick={() => setInsights(null)} className="text-[10px] w-full text-slate-300 font-bold uppercase mt-2 text-center">ปิด</button>
                 </div>
               )}
-            </div>
-            <div className="space-y-3">
-              {dailyLog.map(m => (
-                <div key={m.id} className="bg-white/60 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-white/80 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs shadow-sm">{m.mealType?.[0]}</div>
-                    <div><p className="font-bold text-sm">{m.food_name}</p><p className="text-[10px] text-slate-400 uppercase font-bold">{m.mealType} • {m.calories} kcal</p></div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
 
         {view === 'profile' && (
-          <div className="space-y-6">
-            <div className="bg-white/60 backdrop-blur-xl rounded-[36px] border border-white/60 p-8 shadow-sm">
+          <div className="space-y-6 text-left animate-in slide-in-from-left-8">
+            <div className="bg-white/60 backdrop-blur-xl rounded-[36px] border border-white/80 p-8 shadow-sm">
               <h3 className="font-bold text-slate-800 flex items-center space-x-2 mb-6"><User className="text-teal-600" size={20}/><span>แก้ไขโปรไฟล์</span></h3>
               <form onSubmit={handleUpdateProfile} className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
@@ -481,9 +479,20 @@ export default function App() {
                   <GlassInput label="ส่วนสูง (ซม.)" value={formData.height} onChange={v => setFormData({...formData, height: v})} />
                 </div>
                 <GlassInput label="อายุ (ปี)" value={formData.age} onChange={v => setFormData({...formData, age: v})} />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">ระดับกิจกรรม</label>
+                  <select value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} 
+                    className="w-full bg-white/60 border border-white p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 outline-none text-slate-800 appearance-none shadow-sm">
+                    <option value="1.2">นั่งทำงานเป็นส่วนใหญ่</option>
+                    <option value="1.375">ออกกำลังกายเบา (1-3 วัน/สัปดาห์)</option>
+                    <option value="1.55">ออกกำลังกายปานกลาง (3-5 วัน/สัปดาห์)</option>
+                    <option value="1.725">ออกกำลังกายหนัก (6-7 วัน/สัปดาห์)</option>
+                    <option value="1.9">ออกกำลังกายหนักมาก</option>
+                  </select>
+                </div>
                 <div className="flex space-x-2 mt-6">
-                  <button type="button" onClick={() => setView('home')} className="flex-1 bg-white/50 py-4 rounded-2xl font-bold text-sm text-slate-400">ยกเลิก</button>
-                  <button type="submit" className="flex-[2] bg-teal-600 text-white py-4 rounded-2xl font-bold text-sm shadow-lg active:scale-95 transition-all">บันทึกข้อมูล</button>
+                  <button type="button" onClick={() => setView('home')} className="flex-1 bg-white/50 py-4 rounded-2xl font-bold text-sm text-slate-500">ยกเลิก</button>
+                  <button type="submit" className="flex-[2] bg-teal-600 text-white py-4 rounded-2xl font-bold text-sm shadow-lg active:scale-95 transition-all">บันทึก</button>
                 </div>
               </form>
             </div>
@@ -493,26 +502,26 @@ export default function App() {
 
       {/* แชทบอทลอยตัว */}
       {isChatOpen && (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end text-left">
           <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsChatOpen(false)}></div>
           <div className="bg-white/90 backdrop-blur-2xl h-[70vh] rounded-t-[40px] shadow-2xl flex flex-col relative z-10 animate-in slide-in-from-bottom-full duration-300">
             <div className="flex justify-between items-center p-6 border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-teal-100 text-teal-600 p-2 rounded-xl"><MessageCircle size={20}/></div><h3 className="font-bold">คุยกับ AI โค้ช</h3></div>
+              <div className="flex items-center space-x-3"><div className="bg-teal-100 text-teal-600 p-2 rounded-xl"><MessageCircle size={20}/></div><h3 className="font-bold text-slate-800">ถาม AI</h3></div>
               <button onClick={() => setIsChatOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400"><X size={20}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-4 rounded-[22px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-tr-none' : 'bg-white border border-slate-100 rounded-tl-none'}`}>
+                  <div className={`max-w-[80%] p-4 rounded-[22px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-tr-none' : 'bg-white border border-slate-100 rounded-tl-none text-slate-700'}`}>
                     {msg.content}
                   </div>
                 </div>
               ))}
-              {isChatting && <div className="text-teal-500 flex items-center space-x-2 animate-pulse"><RefreshCw size={14} className="animate-spin"/><span className="text-xs">AI กำลังพิมพ์...</span></div>}
+              {isChatting && <div className="text-teal-500 flex items-center space-x-2 animate-pulse"><RefreshCw size={14} className="animate-spin"/><span className="text-xs">กำลังวิเคราะห์คำตอบ...</span></div>}
             </div>
             <div className="p-4 bg-white/50 border-t border-white/80">
               <div className="flex items-center bg-white p-2 rounded-full shadow-inner border border-slate-100">
-                <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="พิมพ์ข้อความ..." className="flex-1 px-4 text-sm outline-none bg-transparent" onKeyDown={e => e.key === 'Enter' && handleSendMessage()} />
+                <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="คุยกับโค้ช..." className="flex-1 px-4 text-sm outline-none bg-transparent text-slate-800" onKeyDown={e => e.key === 'Enter' && handleSendMessage()} />
                 <button onClick={handleSendMessage} disabled={isChatting || !chatInput} className="bg-teal-500 text-white p-3 rounded-full shadow disabled:opacity-50"><Send size={18}/></button>
               </div>
             </div>
@@ -520,11 +529,9 @@ export default function App() {
         </div>
       )}
 
-      {!isChatOpen && step === 'dashboard' && (
-        <button onClick={() => setIsChatOpen(true)} className="fixed bottom-32 right-6 w-14 h-14 bg-teal-500 rounded-full flex items-center justify-center text-white shadow-xl z-40 active:scale-90 border-4 border-white">
-          <MessageCircle size={24}/>
-        </button>
-      )}
+      <button onClick={() => setIsChatOpen(true)} className="fixed bottom-32 right-6 w-14 h-14 bg-teal-500 rounded-full flex items-center justify-center text-white shadow-xl z-40 active:scale-90 border-4 border-white transition-transform">
+        <MessageCircle size={24}/>
+      </button>
 
       <nav className="fixed bottom-6 left-6 right-6 bg-white/60 backdrop-blur-2xl border border-white/80 shadow-xl h-20 rounded-[36px] flex items-center justify-around px-2 z-50">
         <NavButton active={view === 'home'} onClick={() => setView('home')} icon={<Utensils size={24}/>} />
@@ -534,17 +541,24 @@ export default function App() {
         <NavButton active={view === 'history'} onClick={() => setView('history')} icon={<PieChart size={24}/>} />
       </nav>
 
-      <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} ref={fileInputRef} className="hidden" />
+      <input type="file" accept="image/*" capture="environment" onChange={(e) => {
+        const file = e.target.files[0];
+        if (file) {
+          setImage(file);
+          setImagePreview(URL.createObjectURL(file));
+          setView('camera');
+        }
+      }} ref={fileInputRef} className="hidden" />
     </div>
   );
 }
 
 function GlassInput({ label, placeholder, value, onChange }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1 text-left">
       <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">{label}</label>
       <input required type="number" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-white/60 border border-white p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 outline-none text-slate-800" />
+        className="w-full bg-white/60 border border-white p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 outline-none text-slate-800 shadow-sm" />
     </div>
   );
 }

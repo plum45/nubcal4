@@ -62,7 +62,8 @@
                 Edit3: <><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>,
                 CheckCircle2: <><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></>,
                 Info: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>,
-                ArrowRight: <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>
+                ArrowRight: <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>,
+                Settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -110,12 +111,20 @@
             const [chatMessages, setChatMessages] = useState([{ role: 'model', content: 'สวัสดีครับ! ผมคือ AI โค้ชส่วนตัว มีอะไรให้ช่วยแนะนำไหมครับ? ✨' }]);
             const [isChatting, setIsChatting] = useState(false);
 
+            // ตัวแปรเก็บ API Key ที่ผู้ใช้ระบุเอง ป้องกันการโดนแบนเมื่ออัปโหลดขึ้น Vercel
+            const [localApiKey, setLocalApiKey] = useState(localStorage.getItem('openRouterApiKey') || "");
+            const [showSettings, setShowSettings] = useState(false);
+
             const fileInputRef = useRef(null);
-            // อัปเดต API Key และใช้งานผ่าน OpenRouter
-            const apiKey = "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"; 
 
             useEffect(() => {
-                const timer = setTimeout(() => setSplashStep('finished'), 3000);
+                const timer = setTimeout(() => {
+                    setSplashStep('finished');
+                    // ถ้ายังไม่มี API Key ให้เปิดหน้าตั้งค่า
+                    if (!localStorage.getItem('openRouterApiKey')) {
+                        setShowSettings(true);
+                    }
+                }, 3000);
                 const checkSDK = setInterval(() => { if (window.FirebaseSDK) { setIsSDKReady(true); clearInterval(checkSDK); } }, 100);
                 return () => { clearTimeout(timer); clearInterval(checkSDK); };
             }, []);
@@ -199,8 +208,16 @@
                 setView('home');
             };
 
+            const saveApiKey = () => {
+                localStorage.setItem('openRouterApiKey', localApiKey);
+                setShowSettings(false);
+            };
+
             const callAI = async (prompt, mimeType = null, base64Data = null) => {
-                if (!apiKey) throw new Error("Missing API Key");
+                if (!localApiKey) {
+                    setShowSettings(true);
+                    throw new Error("กรุณาตั้งค่า API Key ก่อนใช้งาน (ไอคอนฟันเฟืองมุมขวาบน)");
+                }
                 
                 let content = [];
                 if (mimeType && base64Data) {
@@ -212,16 +229,14 @@
                     content = prompt;
                 }
 
-                // กำหนดโมเดลเป้าหมายเป็น stepfun ฟรีตามที่คุณต้องการ
                 const targetModel = "stepfun/step-3.5-flash:free";
 
-                // เชื่อมต่อผ่าน OpenRouter API
                 const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`,
-                        "HTTP-Referer": window.location.href, // ข้อมูลที่ OpenRouter แนะนำให้ใส่
+                        "Authorization": `Bearer ${localApiKey}`,
+                        "HTTP-Referer": window.location.href,
                         "X-Title": "NubCal AI"
                     },
                     body: JSON.stringify({
@@ -232,10 +247,18 @@
                 });
 
                 const data = await res.json();
-                if (data.error) throw new Error(data.error.message);
+                
+                if (data.error) {
+                    const errMsg = data.error.message || "";
+                    if (errMsg.toLowerCase().includes("user not found") || res.status === 401) {
+                        throw new Error("API Key ถูกระงับหรือหมดอายุ กรุณาสร้าง Key ใหม่ที่ OpenRouter แล้วมาอัปเดตที่ตั้งค่า (มุมขวาบน)");
+                    } else if (res.status === 429) {
+                        throw new Error("เครดิต API ฟรีหมด หรือมีการใช้งานเกินขีดจำกัด");
+                    }
+                    throw new Error(errMsg || "เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI");
+                }
                 
                 const responseText = data.choices[0].message.content;
-                // ทำความสะอาดตัวอักษร Markdown ก่อนแปลงเป็น JSON
                 return JSON.parse(responseText.replace(/```json|```/g, '').trim());
             };
 
@@ -251,7 +274,6 @@
                         
                     const parsed = await callAI(prompt, image.type, base64);
                     
-                    // Fallback กันแอปพังถ้า AI มองภาพไม่ออก
                     const finalResult = {
                         food_name: parsed.food_name || "อาหารไม่ทราบชื่อ",
                         calories: parsed.calories || 0,
@@ -305,9 +327,14 @@
             };
 
             const handleAddWater = async (amount) => {
-                const { getFirestore, doc, setDoc } = window.FirebaseSDK;
-                const newAmount = Math.max(0, waterIntake + amount);
-                await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
+                try {
+                    const { getFirestore, doc, setDoc } = window.FirebaseSDK;
+                    const newAmount = Math.max(0, waterIntake + amount);
+                    await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
+                } catch (err) {
+                    console.error("Add Water Error:", err);
+                    setError(`Water Sync Error: ${err.message || err}`);
+                }
             };
 
             const handleSendMessage = async () => {
@@ -389,10 +416,49 @@
             return (
                 <div className="min-h-screen relative pb-32 max-w-md mx-auto">
                     <Background />
+                    
+                    {/* Settings Modal */}
+                    {showSettings && (
+                        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm p-6 text-left">
+                            <div className="glass-panel p-8 rounded-[40px] shadow-2xl w-full max-w-sm border-white animate-in bg-white/80">
+                                <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center space-x-2"><Icon name="Settings" size={20} className="text-teal-600"/><span>ตั้งค่าการวิเคราะห์</span></h2>
+                                <p className="text-xs text-slate-500 mb-6 leading-relaxed">กรุณาระบุ OpenRouter API Key ของคุณ เพื่อใช้ในการประมวลผล (ข้อมูลจะถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น)</p>
+                                
+                                <div className="space-y-1 mb-6 text-left">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">OpenRouter API Key</label>
+                                    <input 
+                                        type="password" 
+                                        value={localApiKey} 
+                                        onChange={e => setLocalApiKey(e.target.value)} 
+                                        placeholder="sk-or-v1-..." 
+                                        className="w-full glass-card p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-teal-400 transition-all text-slate-800 shadow-sm"
+                                    />
+                                </div>
+                                
+                                <div className="flex space-x-2">
+                                    <button onClick={() => setShowSettings(false)} className="flex-1 bg-white/50 py-3 rounded-2xl font-bold text-sm text-slate-500 border border-white hover:bg-white/70">ยกเลิก</button>
+                                    <button onClick={saveApiKey} className="flex-[2] bg-teal-600 text-white py-3 rounded-2xl font-bold text-sm shadow-lg hover:bg-teal-700">บันทึก Key</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <header className="glass-nav px-8 pt-12 pb-8 rounded-b-[48px] relative z-20">
                         <div className="flex justify-between items-center mb-8">
-                            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setView('profile')}><div className="w-11 h-11 bg-white border border-white rounded-2xl flex items-center justify-center text-teal-600 shadow-sm"><Icon name="User" size={20}/></div><div className="text-left"><p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider flex items-center">โปรไฟล์ <Icon name="Edit3" size={10} className="ml-1 opacity-50"/></p><p className="text-sm font-bold text-slate-800">BMI: {profile?.bmi || '-'}</p></div></div>
-                            <div className="text-right"><p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">TDEE Goal</p><p className="text-sm font-bold text-slate-800">{profile?.tdee || 0} kcal</p></div>
+                            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setView('profile')}>
+                                <div className="w-11 h-11 bg-white border border-white rounded-2xl flex items-center justify-center text-teal-600 shadow-sm"><Icon name="User" size={20}/></div>
+                                <div className="text-left">
+                                    <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider flex items-center">โปรไฟล์ <Icon name="Edit3" size={10} className="ml-1 opacity-50"/></p>
+                                    <p className="text-sm font-bold text-slate-800">BMI: {profile?.bmi || '-'}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <button onClick={() => setShowSettings(true)} className="text-teal-700 opacity-70 hover:opacity-100 transition-opacity"><Icon name="Settings" size={22}/></button>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">TDEE Goal</p>
+                                    <p className="text-sm font-bold text-slate-800">{profile?.tdee || 0} kcal</p>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex flex-col items-center">
                             <div className="relative w-56 h-56 flex items-center justify-center">
@@ -415,7 +481,7 @@
                                 <div className="glass-panel rounded-3xl p-3 flex items-center space-x-3 shadow-sm"><input type="text" value={textLog} onChange={e => setTextLog(e.target.value)} placeholder="กินอะไรไป? พิมพ์บันทึกที่นี่..." className="flex-1 bg-transparent text-sm outline-none px-2 text-slate-800" onKeyDown={e => e.key === 'Enter' && handleTextLog()} /><button onClick={handleTextLog} className="p-2 bg-teal-500 text-white rounded-full shadow active:scale-90" disabled={loadingTextLog}>{loadingTextLog ? <Icon name="RefreshCw" size={16} className="animate-spin" /> : <Icon name="Send" size={16} />}</button></div>
                                 <div onClick={() => { setImagePreview(null); setView('camera'); fileInputRef.current.click(); }} className="glass-panel p-6 rounded-[32px] shadow flex items-center justify-between cursor-pointer active:scale-95 transition-all"><div className="flex items-center space-x-4 text-left"><div className="w-14 h-14 bg-teal-500 rounded-2xl flex items-center justify-center text-white shadow-lg"><Icon name="Camera" size={26} /></div><div><h3 className="font-bold text-lg text-slate-800">สแกนอาหาร</h3><p className="text-xs text-slate-500">วิเคราะห์อาหารด้วยรูปถ่าย</p></div></div><Icon name="Plus" size={24} className="text-teal-600"/></div>
                                 <div className="bg-blue-50/60 glass-panel rounded-[32px] p-6 flex items-center justify-between shadow-sm"><div className="flex items-center space-x-4 text-left"><div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-500 shadow-sm"><Icon name="Droplets" size={24} /></div><div><h3 className="font-bold text-sm text-slate-800">ดื่มน้ำ</h3><p className="text-xs text-slate-500">{waterIntake}/8 แก้ว</p></div></div><div className="flex space-x-2"><button onClick={() => handleAddWater(-1)} className="w-8 h-8 rounded-full bg-white text-blue-500 font-bold border border-blue-50 shadow-sm">-</button><button onClick={() => handleAddWater(1)} className="w-10 h-10 rounded-full bg-blue-500 text-white font-bold shadow-md">+</button></div></div>
-                                <div className="glass-panel rounded-[36px] p-6 text-left shadow-sm"><h3 className="text-base font-bold flex items-center space-x-2 mb-4 text-slate-800"><Icon name="History" size={18} className="text-teal-600"/><span>ประวัติวันนี้</span></h3><div className="space-y-3">{dailyLog.length === 0 ? <p className="text-center text-slate-400 py-4 text-[10px] uppercase font-bold tracking-widest">ยังไม่มีรายการ</p> : dailyLog.map(m => (<div key={m.id} className="glass-card p-4 rounded-2xl flex items-center justify-between shadow-sm animate-in"><div className="flex items-center space-x-3 text-left"><div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs">{m.mealType?.[0] || 'M'}</div><div><p className="font-bold text-sm text-slate-800">{m.food_name}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{m.mealType} • {m.calories} kcal</p></div></div></div>))}</div></div>
+                                <div className="glass-panel rounded-[36px] p-6 text-left shadow-sm"><h3 className="text-base font-bold flex items-center space-x-2 mb-4 text-slate-800"><Icon name="History" size={18} className="text-teal-600"/><span>ประวัติวันนี้</span></h3><div className="space-y-3">{dailyLog.length === 0 ? <p className="text-center text-slate-400 py-4 text-[10px] uppercase font-bold tracking-widest">ยังไม่มีรายการ</p> : dailyLog.map(m => (<div key={m.id} className="glass-card p-4 rounded-2xl flex items-center justify-between shadow-sm animate-in"><div className="flex items-center space-x-3 text-left"><div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-teal-600 font-black text-xs border border-slate-100">{m.mealType?.[0] || 'M'}</div><div><p className="font-bold text-sm text-slate-800">{m.food_name}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{m.mealType} • {m.calories} kcal</p></div></div></div>))}</div></div>
                             </>
                         )}
                         {view === 'camera' && (
@@ -441,7 +507,7 @@
                     </main>
 
                     {isChatOpen && (
-                        <div className="fixed inset-0 z-[60] flex flex-col justify-end text-left"><div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsChatOpen(false)}></div><div className="bg-white/90 glass-panel h-[70vh] rounded-t-[40px] shadow-2xl flex flex-col relative z-10 animate-in border-t border-white/60"><div className="flex justify-between items-center p-6 border-b border-white/50"><div className="flex items-center space-x-3"><div className="bg-teal-100 text-teal-600 p-2 rounded-xl"><Icon name="MessageCircle" size={20}/></div><h3 className="font-bold text-slate-800">ถาม AI โค้ช</h3></div><button onClick={() => setIsChatOpen(false)} className="p-2 bg-white rounded-full text-slate-400 shadow-sm hover:bg-slate-200 transition-colors"><Icon name="X" size={20}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-4">{chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-4 rounded-[22px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-tr-none' : 'glass-card text-slate-700 rounded-tl-none'}`}>{msg.content}</div></div>))}{isChatting && <div className="text-teal-500 flex items-center space-x-2 animate-pulse"><Icon name="RefreshCw" size={14} className="animate-spin"/><span className="text-xs font-bold">AI กำลังวิเคราะห์...</span></div>}</div><div className="p-4 bg-white/50 border-t border-white/80"><div className="flex items-center bg-white p-2 rounded-full shadow-inner border border-slate-100"><input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="พิมพ์ข้อความคุยกับเรา..." className="flex-1 px-4 text-sm outline-none bg-transparent text-slate-800" onKeyDown={e => e.key === 'Enter' && handleSendMessage()} /><button onClick={handleSendMessage} disabled={isChatting || !chatInput} className="bg-teal-500 text-white p-3 rounded-full shadow active:scale-90 transition-all disabled:opacity-50"><Icon name="Send" size={18}/></button></div></div></div></div>
+                        <div className="fixed inset-0 z-[60] flex flex-col justify-end text-left"><div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsChatOpen(false)}></div><div className="bg-white/90 glass-panel h-[70vh] rounded-t-[40px] shadow-2xl flex flex-col relative z-10 animate-in border-t border-white/60"><div className="flex justify-between items-center p-6 border-b border-white/50"><div className="flex items-center space-x-3"><div className="bg-teal-100 text-teal-600 p-2 rounded-xl"><Icon name="MessageCircle" size={20}/></div><h3 className="font-bold text-slate-800">ถาม AI โค้ช</h3></div><button onClick={() => setIsChatOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 shadow-sm hover:bg-slate-200 transition-colors"><Icon name="X" size={20}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-4">{chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-4 rounded-[22px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-tr-none' : 'glass-card text-slate-700 rounded-tl-none'}`}>{msg.content}</div></div>))}{isChatting && <div className="text-teal-500 flex items-center space-x-2 animate-pulse"><Icon name="RefreshCw" size={14} className="animate-spin"/><span className="text-xs font-bold">AI กำลังประมวลผล...</span></div>}</div><div className="p-4 bg-white/50 border-t border-white/80"><div className="flex items-center bg-white p-2 rounded-full shadow-inner border border-slate-100"><input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="พิมพ์ข้อความคุยกับเรา..." className="flex-1 px-4 text-sm outline-none bg-transparent text-slate-800" onKeyDown={e => e.key === 'Enter' && handleSendMessage()} /><button onClick={handleSendMessage} disabled={isChatting || !chatInput} className="bg-teal-500 text-white p-3 rounded-full shadow active:scale-90 transition-all disabled:opacity-50"><Icon name="Send" size={18}/></button></div></div></div></div>
                     )}
                     <button onClick={() => setIsChatOpen(true)} className="fixed bottom-32 right-6 w-14 h-14 bg-teal-500 rounded-full flex items-center justify-center text-white shadow-xl z-40 active:scale-90 border-4 border-white transition-transform hover:scale-105 shadow-teal-500/30"><Icon name="MessageCircle" size={24}/></button>
                     <nav className="fixed bottom-6 left-6 right-6 glass-nav h-20 rounded-[36px] flex items-center justify-around px-2 z-50 shadow-xl border-t border-white/40"><button onClick={() => setView('home')} className={`p-4 rounded-2xl transition-all ${view === 'home' ? 'text-teal-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}><Icon name="Utensils" size={24}/></button><button onClick={() => { setImagePreview(null); setView('camera'); fileInputRef.current.click(); }} className="w-16 h-16 bg-gradient-to-br from-teal-500 to-emerald-500 text-white rounded-[24px] flex items-center justify-center shadow-lg active:scale-90 -mt-12 border-4 border-white transition-transform hover:rotate-12"><Icon name="Plus" size={32}/></button><button onClick={() => setView('history')} className={`p-4 rounded-2xl transition-all ${view === 'history' ? 'text-teal-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}><Icon name="PieChart" size={24}/></button></nav>
@@ -458,4 +524,3 @@
     </script>
 </body>
 </html>
-

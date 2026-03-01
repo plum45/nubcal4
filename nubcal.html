@@ -1,0 +1,710 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Camera, RefreshCw, Activity, AlertCircle, Flame, Utensils, 
+  MessageSquareText, Target, Plus, History, Trash2, CheckCircle2, 
+  User, ArrowRight, ChevronLeft, PieChart, Info,
+  Droplets, MessageCircle, Send, ScanText, Sparkles, X, Edit3
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, doc, setDoc, getDoc, collection, onSnapshot, 
+  query, addDoc, serverTimestamp, orderBy 
+} from 'firebase/firestore';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'calorie-ai-glass';
+
+export default function App() {
+  // --- States ---
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [step, setStep] = useState('loading'); 
+  const [view, setView] = useState('home'); 
+  
+  const [formData, setFormData] = useState({
+    gender: 'male',
+    age: '',
+    weight: '',
+    height: '',
+    activity: '1.2'
+  });
+
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [userHint, setUserHint] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [mealType, setMealType] = useState('Breakfast');
+  const [dailyLog, setDailyLog] = useState([]);
+  
+  // AI Coach & Insights
+  const [aiAdvice, setAiAdvice] = useState(null);
+  const [loadingAdvice, setLoadingAdvice] = useState(false);
+  const [insights, setInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
+  // New Features States
+  const [waterIntake, setWaterIntake] = useState(0);
+  const [scanMode, setScanMode] = useState('food'); // 'food' or 'label'
+  const [textLog, setTextLog] = useState("");
+  const [loadingTextLog, setLoadingTextLog] = useState(false);
+  
+  // Chatbot States
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'model', content: 'สวัสดีครับ! ผมคือ AI โค้ชส่วนตัว วันนี้มีอะไรให้ผมช่วยแนะนำเรื่องโภชนาการไหมครับ? ✨' }
+  ]);
+  const [isChatting, setIsChatting] = useState(false);
+
+  const fileInputRef = useRef(null);
+  const apiKey = ""; 
+
+  // --- Auth logic ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) { console.error("Auth error:", err); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // --- Data Fetching ---
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchProfile = async () => {
+      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'profile');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setProfile(docSnap.data());
+        setStep('dashboard');
+      } else { setStep('onboarding'); }
+    };
+    fetchProfile();
+
+    const mealsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'meals');
+    const unsubscribeMeals = onSnapshot(mealsRef, (snapshot) => {
+      const meals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const today = new Date().toDateString();
+      const filtered = meals.filter(m => {
+        if (!m.timestamp) return false;
+        const d = m.timestamp.toDate ? m.timestamp.toDate() : new Date(m.timestamp);
+        return d.toDateString() === today;
+      });
+      // Sort by time descending
+      setDailyLog(filtered.sort((a,b) => b.timestamp - a.timestamp));
+    });
+
+    // Water Fetching
+    const todayStr = new Date().toLocaleDateString('en-CA'); 
+    const waterRef = doc(db, 'artifacts', appId, 'users', user.uid, 'water', todayStr);
+    const unsubscribeWater = onSnapshot(waterRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setWaterIntake(docSnap.data().amount || 0);
+      } else {
+        setWaterIntake(0);
+      }
+    });
+
+    return () => { unsubscribeMeals(); unsubscribeWater(); };
+  }, [user]);
+
+  // --- Water Logic ---
+  const handleAddWater = async (amount) => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const newAmount = Math.max(0, waterIntake + amount);
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'water', todayStr), { amount: newAmount }, { merge: true });
+  };
+
+  // --- Calculation ---
+  const calculateStats = (data) => {
+    const { gender, age, weight, height, activity } = data;
+    let bmr = gender === 'male' 
+      ? (10 * weight) + (6.25 * height) - (5 * age) + 5
+      : (10 * weight) + (6.25 * height) - (5 * age) - 161;
+    const tdee = Math.round(bmr * parseFloat(activity));
+    const bmi = (weight / ((height / 100) ** 2)).toFixed(1);
+    return { bmr: Math.round(bmr), tdee, bmi };
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    const stats = calculateStats(formData);
+    const newProfile = { ...formData, ...stats };
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'profile'), newProfile);
+    setProfile(newProfile);
+    setStep('dashboard');
+  };
+
+  // --- เพิ่มฟังก์ชันสำหรับบันทึกการแก้ไขโปรไฟล์ ---
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    const stats = calculateStats(formData);
+    const newProfile = { ...formData, ...stats };
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'profile'), newProfile);
+    setProfile(newProfile);
+    setView('home'); // บันทึกเสร็จให้กลับไปหน้าโฮม
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      setView('camera');
+      setResult(null);
+    }
+  };
+
+  // --- AI Call Helper ---
+  const callGemini = async (prompt, mimeType = null, base64Data = null) => {
+    const parts = [{ text: prompt }];
+    if (mimeType && base64Data) parts.push({ inlineData: { mimeType, data: base64Data } });
+    
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: "application/json" } })
+    });
+    const data = await res.json();
+    return JSON.parse(data.candidates[0].content.parts[0].text);
+  };
+
+  // 1. Analyze Image (Food or Label OCR)
+  const handleAnalyze = async () => {
+    setLoading(true); setError(null);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise(r => { reader.onload = () => r(reader.result.split(',')[1]); reader.readAsDataURL(image); });
+      
+      const prompt = scanMode === 'label'
+        ? `สกัดข้อมูลจากภาพฉลากโภชนาการนี้และตอบเป็น JSON เท่านั้น โครงสร้าง: { "food_name": "ชื่อสินค้าหรือผลิตภัณฑ์", "calories": int (แคลอรี่ทั้งหมด), "protein": int, "carbs": int, "fat": int, "summary": "สรุปข้อมูลสารอาหารที่น่าสนใจจากฉลากนี้" }`
+        : `วิเคราะห์ภาพอาหารและตอบเป็น JSON เท่านั้น: { "food_name": "...", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "..." } คำนึงถึงปริมาตรและสีภาชนะอย่างละเอียด ${userHint ? `เพิ่มเติม: ${userHint}` : ''}`;
+      
+      const parsed = await callGemini(prompt, image.type, base64);
+      setResult(parsed); setView('result');
+    } catch (err) { setError("การวิเคราะห์ขัดข้อง กรุณาลองอีกครั้ง"); }
+    finally { setLoading(false); }
+  };
+
+  // 2. Text-to-Log
+  const handleTextLog = async () => {
+    if (!textLog.trim()) return;
+    setLoadingTextLog(true); setError(null);
+    try {
+      const prompt = `ผู้ใช้บันทึกอาหารผ่านข้อความว่า: "${textLog}" 
+      แปลงเป็น JSON เท่านั้น โครงสร้าง: { "food_name": "ชื่ออาหาร", "calories": int, "protein": int, "carbs": int, "fat": int, "summary": "สรุปโภชนาการสั้นๆ" }`;
+      
+      const parsed = await callGemini(prompt);
+      setResult(parsed); 
+      setView('result'); 
+      setTextLog("");
+    } catch (err) { setError("ไม่สามารถประมวลผลข้อความได้"); }
+    finally { setLoadingTextLog(false); }
+  };
+
+  // 3. Chatbot
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+    const userMsg = chatInput;
+    const newChat = [...chatMessages, { role: 'user', content: userMsg }];
+    setChatMessages(newChat);
+    setChatInput("");
+    setIsChatting(true);
+
+    try {
+      const historyStr = newChat.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n');
+      const prompt = `คุณคือ AI โค้ชโภชนาการส่วนตัว TDEE ของผู้ใช้คือ ${profile?.tdee} kcal วันนี้กินไปแล้ว ${consumed} kcal 
+      ประวัติการแชท:
+      ${historyStr}
+      ตอบกลับข้อความล่าสุดของผู้ใช้แบบเป็นกันเอง สั้นกระชับ ให้คำแนะนำที่มีประโยชน์
+      (ตอบเป็น JSON: { "reply": "ข้อความตอบกลับ" })`;
+
+      const parsed = await callGemini(prompt);
+      setChatMessages([...newChat, { role: 'model', content: parsed.reply }]);
+    } catch (err) {
+      setChatMessages([...newChat, { role: 'model', content: "ขออภัยครับ ระบบแชทขัดข้องชั่วคราว" }]);
+    } finally { setIsChatting(false); }
+  };
+
+  // 4. Weekly Insights
+  const handleGetInsights = async () => {
+    setLoadingInsights(true);
+    try {
+      const logStr = dailyLog.map(m => `${m.mealType}: ${m.food_name} (${m.calories}kcal)`).join(', ') || "ยังไม่มีข้อมูล";
+      const prompt = `วิเคราะห์พฤติกรรมการกินวันนี้จากข้อมูล: ${logStr} (TDEE เป้าหมาย: ${profile?.tdee}kcal) 
+      ตอบเป็น JSON: { "insight": "วิเคราะห์ข้อดีและข้อเสียสั้นๆ", "suggestion": "คำแนะนำสำหรับการกินในวันพรุ่งนี้", "score": int (คะแนนสุขภาพ 1-100) }`;
+      
+      const parsed = await callGemini(prompt);
+      setInsights(parsed);
+    } catch (err) { console.error(err); } 
+    finally { setLoadingInsights(false); }
+  };
+
+  const saveMeal = async () => {
+    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'meals'), {
+      ...result, mealType, timestamp: serverTimestamp()
+    });
+    setView('home');
+    setImagePreview(null);
+    setResult(null);
+  };
+
+  const consumed = dailyLog.reduce((s, m) => s + m.calories, 0);
+  const progress = profile ? Math.min((consumed / profile.tdee) * 100, 100) : 0;
+
+  // --- Background Component for Glassmorphism ---
+  const GlassBackground = () => (
+    <div className="fixed inset-0 z-[-1] overflow-hidden bg-slate-50">
+      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-emerald-300/40 blur-[80px] mix-blend-multiply animate-pulse"></div>
+      <div className="absolute top-[20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-cyan-200/40 blur-[80px] mix-blend-multiply"></div>
+      <div className="absolute bottom-[-10%] left-[10%] w-[50vw] h-[50vw] rounded-full bg-teal-200/40 blur-[80px] mix-blend-multiply"></div>
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]"></div>
+    </div>
+  );
+
+  if (step === 'loading') return (
+    <div className="h-screen flex items-center justify-center relative">
+      <GlassBackground />
+      <div className="bg-white/40 backdrop-blur-xl p-8 rounded-[32px] border border-white/60 shadow-2xl">
+        <RefreshCw className="animate-spin text-teal-600" size={32} />
+      </div>
+    </div>
+  );
+
+  if (step === 'onboarding') return (
+    <div className="min-h-screen relative p-6 flex flex-col justify-center max-w-md mx-auto font-sans text-slate-800">
+      <GlassBackground />
+      <div className="bg-white/50 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] p-8 rounded-[40px] animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="mb-8 text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 mx-auto rounded-3xl flex items-center justify-center text-white shadow-xl shadow-teal-500/30 mb-6">
+            <Activity size={32} />
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">เป้าหมายของคุณ</h1>
+          <p className="text-slate-600 mt-2 text-sm">ข้อมูลเพื่อคำนวณ TDEE อย่างแม่นยำ</p>
+        </div>
+        <form onSubmit={handleRegister} className="space-y-5">
+          <div className="flex bg-white/40 p-1.5 rounded-2xl border border-white/50">
+            {['male', 'female'].map(g => (
+              <button key={g} type="button" onClick={() => setFormData({...formData, gender: g})} 
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${formData.gender === g ? 'bg-white shadow-sm text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}>
+                {g === 'male' ? 'ชาย' : 'หญิง'}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <GlassInput label="น้ำหนัก (กก.)" placeholder="70" value={formData.weight} onChange={v => setFormData({...formData, weight: v})} />
+            <GlassInput label="ส่วนสูง (ซม.)" placeholder="175" value={formData.height} onChange={v => setFormData({...formData, height: v})} />
+          </div>
+          <GlassInput label="อายุ (ปี)" placeholder="25" value={formData.age} onChange={v => setFormData({...formData, age: v})} />
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">ระดับกิจกรรม</label>
+            <select value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} 
+              className="w-full bg-white/50 backdrop-blur-md border border-white/60 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-teal-400 focus:bg-white/70 transition-all outline-none text-slate-700">
+              <option value="1.2">นั่งทำงานเป็นส่วนใหญ่</option>
+              <option value="1.375">ออกกำลังกายเบาๆ (1-3 วัน/สัปดาห์)</option>
+              <option value="1.55">ออกกำลังกายปานกลาง (3-5 วัน/สัปดาห์)</option>
+              <option value="1.725">ออกกำลังกายหนัก (6-7 วัน/สัปดาห์)</option>
+            </select>
+          </div>
+          <button className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-[20px] font-bold text-lg shadow-lg shadow-teal-500/30 mt-6 flex items-center justify-center space-x-2 active:scale-95 transition-transform">
+            <span>เริ่มใช้งานแอป</span>
+            <ArrowRight size={20} />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen relative pb-32 max-w-md mx-auto font-sans text-slate-800 selection:bg-teal-200">
+      <GlassBackground />
+      
+      {/* Header */}
+      <header className="bg-white/40 backdrop-blur-xl px-8 pt-12 pb-8 rounded-b-[48px] border-b border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.05)] relative z-20">
+        <div className="flex justify-between items-center mb-8">
+          {/* ทำให้คลิกที่โปรไฟล์เพื่อเข้าไปแก้ไขข้อมูลได้ */}
+          <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => {
+            setFormData({
+              gender: profile?.gender || 'male',
+              age: profile?.age || '',
+              weight: profile?.weight || '',
+              height: profile?.height || '',
+              activity: profile?.activity || '1.2'
+            });
+            setView('profile');
+          }}>
+            <div className="w-11 h-11 bg-white/60 border border-white/80 rounded-2xl flex items-center justify-center text-teal-600 shadow-sm group-hover:bg-white/80 transition-all"><User size={20}/></div>
+            <div>
+              <p className="text-[10px] font-bold text-teal-700/70 uppercase tracking-wider flex items-center space-x-1">
+                <span>สุขภาพของคุณ</span> 
+                <Edit3 size={10} className="opacity-70" />
+              </p>
+              <p className="text-sm font-bold text-slate-800">BMI: {profile?.bmi} <span className="text-teal-500 ml-1">●</span></p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold text-teal-700/70 uppercase tracking-wider">เป้าหมาย TDEE</p>
+            <p className="text-sm font-bold text-slate-800 bg-white/50 px-3 py-1 rounded-full border border-white/60 mt-0.5 inline-block">{profile?.tdee} kcal</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center">
+          <div className="relative w-56 h-56 flex items-center justify-center">
+            <svg className="w-full h-full -rotate-90 filter drop-shadow-md">
+              <circle cx="112" cy="112" r="100" fill="transparent" stroke="rgba(255,255,255,0.5)" strokeWidth="16" />
+              <circle cx="112" cy="112" r="100" fill="transparent" stroke="url(#gradient)" strokeWidth="16" 
+                strokeDasharray={628} strokeDashoffset={628 - (628 * progress) / 100}
+                strokeLinecap="round" className="transition-all duration-1000 ease-out" />
+              <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#14b8a6" />
+                  <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="absolute text-center flex flex-col items-center justify-center w-full h-full">
+              <div className="bg-white/30 backdrop-blur-md rounded-full w-36 h-36 flex flex-col items-center justify-center border border-white/50 shadow-inner">
+                <p className="text-5xl font-black tracking-tighter text-slate-800 bg-clip-text text-transparent bg-gradient-to-br from-slate-700 to-slate-900">{consumed}</p>
+                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-1">Kcal Eat</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="px-6 mt-6 relative z-10">
+        {view === 'home' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {error && <div className="bg-red-50/80 backdrop-blur-md text-red-600 p-4 rounded-[20px] text-xs border border-red-100">{error}</div>}
+
+            {/* Feature 1: Text-to-Log */}
+            <div className="bg-white/50 backdrop-blur-xl rounded-[32px] border border-white/60 p-4 shadow-sm flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/80 rounded-full flex items-center justify-center text-teal-600 shadow-sm border border-white">
+                <Edit3 size={18} />
+              </div>
+              <input 
+                type="text" value={textLog} onChange={e => setTextLog(e.target.value)}
+                placeholder="พิมพ์อาหารที่กิน... (เช่น ลาเต้ 1 แก้ว)"
+                className="flex-1 bg-transparent text-sm outline-none placeholder-slate-400"
+                onKeyDown={e => e.key === 'Enter' && handleTextLog()}
+              />
+              <button onClick={handleTextLog} disabled={loadingTextLog || !textLog} className="p-2 bg-teal-500 text-white rounded-full shadow-md disabled:opacity-50 transition-all">
+                {loadingTextLog ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
+              </button>
+            </div>
+
+            {/* Quick Action Camera */}
+            <div onClick={() => fileInputRef.current.click()} 
+              className="bg-gradient-to-br from-white/60 to-white/40 backdrop-blur-lg p-6 rounded-[32px] border border-white/80 shadow-[0_8px_32px_0_rgba(31,38,135,0.05)] flex items-center justify-between group cursor-pointer active:scale-95 transition-all">
+              <div className="flex items-center space-x-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-teal-500/30 group-hover:rotate-12 transition-transform">
+                  <Camera size={26} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-800">สแกนด้วยภาพ</h3>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">อาหาร หรือ ฉลากโภชนาการ</p>
+                </div>
+              </div>
+              <div className="bg-white/60 p-2 rounded-full border border-white/80 text-teal-600">
+                <Plus size={20} strokeWidth={3} />
+              </div>
+            </div>
+
+            {/* Feature 2: Water Tracker */}
+            <div className="bg-blue-50/50 backdrop-blur-xl rounded-[32px] border border-blue-100/50 p-6 shadow-sm flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-blue-100/80 rounded-2xl flex items-center justify-center text-blue-500 shadow-sm">
+                  <Droplets size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800">ดื่มน้ำวันนี้</h3>
+                  <p className="text-xs text-slate-500">{waterIntake} / 8 แก้ว</p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button onClick={() => handleAddWater(-1)} className="w-8 h-8 rounded-full bg-white/60 text-blue-600 flex items-center justify-center shadow-sm font-bold">-</button>
+                <button onClick={() => handleAddWater(1)} className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/30 font-bold">+</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'camera' && (
+          <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500">
+            {/* Feature 3: OCR Mode Toggle */}
+            <div className="flex bg-white/40 backdrop-blur-md p-1.5 rounded-2xl border border-white/60 mx-auto w-3/4">
+              <button onClick={() => setScanMode('food')} className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center space-x-1 transition-all ${scanMode === 'food' ? 'bg-white shadow-sm text-teal-600' : 'text-slate-500'}`}>
+                <Utensils size={14}/><span>อาหาร</span>
+              </button>
+              <button onClick={() => setScanMode('label')} className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center space-x-1 transition-all ${scanMode === 'label' ? 'bg-white shadow-sm text-teal-600' : 'text-slate-500'}`}>
+                <ScanText size={14}/><span>ฉลากโภชนาการ</span>
+              </button>
+            </div>
+
+            <div className="rounded-[40px] overflow-hidden shadow-2xl aspect-[4/5] relative border border-white/50">
+              <img src={imagePreview} className="w-full h-full object-cover" />
+              <button onClick={() => setView('home')} className="absolute top-4 left-4 bg-black/20 backdrop-blur-md border border-white/20 p-3 rounded-2xl text-white hover:bg-black/40 transition">
+                <ChevronLeft/>
+              </button>
+            </div>
+            
+            {scanMode === 'food' && (
+              <div className="bg-white/50 backdrop-blur-xl p-5 rounded-[32px] border border-white/60 shadow-lg">
+                <div className="flex items-center space-x-2 text-slate-600 mb-2">
+                  <Info size={14} className="text-teal-600"/>
+                  <span className="text-xs font-bold uppercase tracking-wide">ไกด์ AI เพิ่มความแม่นยำ</span>
+                </div>
+                <input value={userHint} onChange={e => setUserHint(e.target.value)} 
+                  placeholder="เช่น ข้าวมันไก่ ไม่หนัง..."
+                  className="w-full bg-white/60 border border-white/80 p-3 rounded-[20px] text-sm outline-none focus:ring-2 focus:ring-teal-400 transition-all shadow-inner"/>
+              </div>
+            )}
+            
+            <button onClick={handleAnalyze} disabled={loading} 
+              className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-5 rounded-[24px] font-bold text-lg shadow-xl shadow-teal-500/30 flex items-center justify-center space-x-3 active:scale-95 disabled:opacity-50 transition-all border border-white/20">
+              {loading ? <RefreshCw className="animate-spin" /> : <Activity />}
+              <span>{loading ? 'กำลังสแกน...' : `วิเคราะห์${scanMode === 'food' ? 'อาหาร' : 'ฉลาก'}`}</span>
+            </button>
+          </div>
+        )}
+
+        {view === 'result' && result && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="bg-white/60 backdrop-blur-2xl p-8 rounded-[40px] shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] border border-white/80 relative overflow-hidden text-center">
+              <h2 className="text-3xl font-black text-slate-800 mb-2 leading-tight relative z-10">{result.food_name}</h2>
+              <p className="text-slate-600 text-xs mb-8 px-2 leading-relaxed relative z-10">{result.summary}</p>
+              
+              <div className="inline-flex flex-col items-center bg-gradient-to-br from-orange-400 to-amber-500 text-white px-10 py-6 rounded-[32px] shadow-xl shadow-orange-500/30 mb-8 border border-white/30 relative z-10">
+                <span className="text-5xl font-black tracking-tighter leading-none">{result.calories}</span>
+                <span className="text-[10px] font-bold uppercase tracking-[4px] mt-1.5 opacity-90">Calories</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-8 relative z-10">
+                <GlassMacroCard label="Protein" value={result.protein} color="text-sky-600" />
+                <GlassMacroCard label="Carbs" value={result.carbs} color="text-fuchsia-600" />
+                <GlassMacroCard label="Fat" value={result.fat} color="text-amber-600" />
+              </div>
+
+              <div className="text-left border-t border-white/50 pt-8 relative z-10">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 text-center">เลือกประเภทมื้ออาหาร</p>
+                <div className="grid grid-cols-2 gap-3 mb-8">
+                  {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map(type => (
+                    <button key={type} onClick={() => setMealType(type)} 
+                      className={`py-3.5 rounded-2xl font-bold text-xs transition-all border ${mealType === type ? 'bg-teal-500 text-white border-teal-400 shadow-md shadow-teal-500/20' : 'bg-white/50 text-slate-600 border-white/80 hover:bg-white/70'}`}>
+                      {type}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={saveMeal} className="w-full bg-slate-800 text-white py-5 rounded-[24px] font-bold text-lg shadow-xl shadow-slate-800/20 flex items-center justify-center space-x-2 active:scale-95 transition-all">
+                  <CheckCircle2 size={20}/>
+                  <span>บันทึกมื้ออาหาร</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'history' && (
+          <div className="space-y-6 animate-in slide-in-from-right-8 duration-500">
+            {/* Feature 5: AI Health Insights */}
+            <div className="bg-white/50 backdrop-blur-xl rounded-[36px] border border-white/60 p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold flex items-center space-x-2 text-slate-800">
+                  <Sparkles className="text-amber-500" size={20}/>
+                  <span>AI สรุปสุขภาพของคุณ</span>
+                </h3>
+              </div>
+              {!insights ? (
+                <button onClick={handleGetInsights} disabled={loadingInsights} className="w-full py-4 rounded-[20px] bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold text-sm shadow-md flex justify-center items-center space-x-2 transition-all active:scale-95">
+                  {loadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Activity size={18}/>}
+                  <span>{loadingInsights ? 'กำลังวิเคราะห์พฤติกรรม...' : 'กดเพื่อดูบทวิเคราะห์วันนี้'}</span>
+                </button>
+              ) : (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex items-center space-x-4 mb-2">
+                    <div className="w-16 h-16 rounded-full bg-white/80 border-4 border-amber-200 flex items-center justify-center shadow-inner text-amber-500 font-black text-xl">
+                      {insights.score}
+                    </div>
+                    <div><p className="font-bold text-slate-800">คะแนนสุขภาพ</p><p className="text-xs text-slate-500">ประเมินจากเมนูของคุณ</p></div>
+                  </div>
+                  <div className="bg-white/60 p-4 rounded-[20px] border border-white/80 text-sm text-slate-700 leading-relaxed shadow-sm">
+                    "{insights.insight}"
+                  </div>
+                  <div className="bg-amber-50/80 p-4 rounded-[20px] border border-amber-100/50 text-xs text-amber-800 font-medium">
+                    <strong className="block mb-1">💡 แนะนำ:</strong> {insights.suggestion}
+                  </div>
+                  <button onClick={() => setInsights(null)} className="text-xs font-bold text-slate-400 w-full text-center mt-2">ปิดหน้าต่าง</button>
+                </div>
+              )}
+            </div>
+
+            <h3 className="font-bold text-slate-800 px-2 mt-4">ประวัติการกิน</h3>
+            <div className="space-y-3">
+              {dailyLog.map(m => (
+                <div key={m.id} className="bg-white/60 backdrop-blur-md p-4 rounded-[20px] shadow-sm border border-white/80 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-teal-600 text-xs font-black uppercase shadow-sm border border-white/50">{m.mealType?.[0]}</div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{m.food_name}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">{m.mealType} • {m.calories} kcal</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* เพิ่มหน้าสำหรับแก้ไขโปรไฟล์ (Edit Profile View) */}
+        {view === 'profile' && (
+          <div className="space-y-6 animate-in slide-in-from-left-8 duration-500">
+            <div className="bg-white/50 backdrop-blur-xl rounded-[36px] border border-white/60 p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-slate-800 flex items-center space-x-2">
+                  <User className="text-teal-600" size={20}/>
+                  <span>แก้ไขข้อมูลส่วนตัว</span>
+                </h3>
+              </div>
+              <form onSubmit={handleUpdateProfile} className="space-y-5">
+                <div className="flex bg-white/40 p-1.5 rounded-2xl border border-white/50">
+                  {['male', 'female'].map(g => (
+                    <button key={g} type="button" onClick={() => setFormData({...formData, gender: g})} 
+                      className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${formData.gender === g ? 'bg-white shadow-sm text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}>
+                      {g === 'male' ? 'ชาย' : 'หญิง'}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <GlassInput label="น้ำหนัก (กก.)" placeholder="70" value={formData.weight} onChange={v => setFormData({...formData, weight: v})} />
+                  <GlassInput label="ส่วนสูง (ซม.)" placeholder="175" value={formData.height} onChange={v => setFormData({...formData, height: v})} />
+                </div>
+                <GlassInput label="อายุ (ปี)" placeholder="25" value={formData.age} onChange={v => setFormData({...formData, age: v})} />
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">ระดับกิจกรรม</label>
+                  <select value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} 
+                    className="w-full bg-white/50 backdrop-blur-md border border-white/60 p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 focus:bg-white/70 transition-all outline-none text-slate-700 shadow-inner">
+                    <option value="1.2">นั่งทำงานเป็นส่วนใหญ่</option>
+                    <option value="1.375">ออกกำลังกายเบาๆ (1-3 วัน/สัปดาห์)</option>
+                    <option value="1.55">ออกกำลังกายปานกลาง (3-5 วัน/สัปดาห์)</option>
+                    <option value="1.725">ออกกำลังกายหนัก (6-7 วัน/สัปดาห์)</option>
+                  </select>
+                </div>
+                <div className="flex space-x-3 mt-6">
+                  <button type="button" onClick={() => setView('home')} className="flex-1 bg-white/50 text-slate-600 py-4 rounded-[20px] font-bold text-sm border border-white/80 shadow-sm active:scale-95 transition-transform">
+                    ยกเลิก
+                  </button>
+                  <button type="submit" className="flex-[2] bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-[20px] font-bold text-sm shadow-lg shadow-teal-500/30 flex items-center justify-center space-x-2 active:scale-95 transition-transform">
+                    <CheckCircle2 size={18} />
+                    <span>บันทึกการเปลี่ยนแปลง</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Feature 4: Chatbot Overlay */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsChatOpen(false)}></div>
+          <div className="bg-white/80 backdrop-blur-2xl h-[70vh] rounded-t-[40px] shadow-2xl border-t border-white/60 flex flex-col relative z-10 animate-in slide-in-from-bottom-full duration-300">
+            <div className="flex justify-between items-center p-6 border-b border-white/50">
+              <div className="flex items-center space-x-3">
+                <div className="bg-teal-100 text-teal-600 p-2 rounded-xl"><MessageCircle size={20}/></div>
+                <h3 className="font-bold text-slate-800">AI นักโภชนาการ</h3>
+              </div>
+              <button onClick={() => setIsChatOpen(false)} className="p-2 bg-white rounded-full text-slate-400 shadow-sm"><X size={20}/></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] p-4 rounded-[24px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-tr-sm' : 'bg-white/80 border border-white border-white/60 text-slate-700 rounded-tl-sm'}`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {isChatting && <div className="text-teal-500 flex items-center space-x-2"><RefreshCw size={16} className="animate-spin"/><span className="text-xs">กำลังพิมพ์...</span></div>}
+            </div>
+
+            <div className="p-4 bg-white/60 border-t border-white/50">
+              <div className="flex items-center bg-white p-2 rounded-full shadow-inner border border-slate-100">
+                <input 
+                  type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  placeholder="ถามอะไรฉันก็ได้..."
+                  className="flex-1 bg-transparent px-4 text-sm outline-none"
+                  onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                />
+                <button onClick={handleSendMessage} disabled={isChatting || !chatInput} className="bg-teal-500 text-white p-3 rounded-full shadow-md disabled:opacity-50">
+                  <Send size={18}/>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chatbot FAB */}
+      {!isChatOpen && step === 'dashboard' && (
+        <button onClick={() => setIsChatOpen(true)} className="fixed bottom-32 right-6 w-14 h-14 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-teal-500/40 z-40 active:scale-90 transition-transform border-2 border-white/50">
+          <MessageCircle size={24}/>
+        </button>
+      )}
+
+      {/* Glass Bottom Navigation */}
+      <nav className="fixed bottom-6 left-6 right-6 bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] h-20 rounded-[36px] flex items-center justify-around px-2 z-50">
+        <NavButton active={view === 'home'} onClick={() => setView('home')} icon={<Utensils size={24}/>} />
+        <button onClick={() => fileInputRef.current.click()} className="w-16 h-16 bg-gradient-to-br from-teal-500 to-emerald-500 text-white rounded-[24px] flex items-center justify-center shadow-lg shadow-teal-500/40 active:scale-90 transition-transform -mt-10 border border-white/30 relative">
+           <Plus size={32}/>
+        </button>
+        <NavButton active={view === 'history'} onClick={() => setView('history')} icon={<PieChart size={24}/>} />
+      </nav>
+
+      <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} ref={fileInputRef} className="hidden" />
+    </div>
+  );
+}
+
+// --- Sub-components for Glassmorphism ---
+function GlassInput({ label, placeholder, value, onChange }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-2">{label}</label>
+      <input required type="number" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
+        className="w-full bg-white/50 backdrop-blur-md border border-white/60 p-4 rounded-[20px] text-sm focus:ring-2 focus:ring-teal-400 focus:bg-white/70 transition-all outline-none text-slate-800 placeholder-slate-400 shadow-inner" />
+    </div>
+  );
+}
+
+function GlassMacroCard({ label, value, color }) {
+  return (
+    <div className="bg-white/50 backdrop-blur-md p-4 rounded-[24px] border border-white/80 shadow-sm flex flex-col justify-center items-center">
+      <p className={`text-[10px] font-black uppercase tracking-wider mb-1 ${color}`}>{label}</p>
+      <p className="text-xl font-black text-slate-800 tracking-tighter">{value}<span className="text-[10px] ml-0.5 opacity-50 font-bold">g</span></p>
+    </div>
+  );
+}
+
+function NavButton({ active, onClick, icon }) {
+  return (
+    <button onClick={onClick} className={`p-4 rounded-2xl transition-all ${active ? 'text-teal-600 bg-white/60 shadow-sm border border-white/80' : 'text-slate-500 hover:text-teal-500 hover:bg-white/30'}`}>
+      {icon}
+    </button>
+  );
+}

@@ -111,8 +111,8 @@
             const [isChatting, setIsChatting] = useState(false);
 
             const fileInputRef = useRef(null);
-            // Updated with the provided API Key
-            const apiKey = "AIzaSyD_3zUOypo3eYP4WcoqFvVarvQGj7fnm_s"; 
+            // อัปเดต API Key และใช้งานผ่าน OpenRouter
+            const apiKey = "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"; 
 
             useEffect(() => {
                 const timer = setTimeout(() => setSplashStep('finished'), 3000);
@@ -199,26 +199,44 @@
                 setView('home');
             };
 
-            const callGemini = async (prompt, mimeType = null, base64Data = null) => {
+            const callAI = async (prompt, mimeType = null, base64Data = null) => {
                 if (!apiKey) throw new Error("Missing API Key");
-                const contents = [{ parts: [{ text: prompt }] }];
-                if (mimeType && base64Data) contents[0].parts.push({ inlineData: { mimeType, data: base64Data } });
                 
-                // เปลี่ยนโมเดลเป็น gemini-1.5-flash เพื่อให้รองรับกับ Public API Key ทุกประเภท
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        contents, 
-                        generationConfig: { 
-                            responseMimeType: "application/json",
-                            temperature: 0.2 // เพิ่มความแม่นยำ ลดการคาดเดา
-                        } 
+                let content = [];
+                if (mimeType && base64Data) {
+                    content = [
+                        { type: "text", text: prompt },
+                        { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
+                    ];
+                } else {
+                    content = prompt;
+                }
+
+                // กำหนดโมเดลเป้าหมายเป็น stepfun ฟรีตามที่คุณต้องการ
+                const targetModel = "stepfun/step-3.5-flash:free";
+
+                // เชื่อมต่อผ่าน OpenRouter API
+                const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
+                        "HTTP-Referer": window.location.href, // ข้อมูลที่ OpenRouter แนะนำให้ใส่
+                        "X-Title": "NubCal AI"
+                    },
+                    body: JSON.stringify({
+                        model: targetModel,
+                        messages: [{ role: "user", content: content }],
+                        temperature: 0.2
                     })
                 });
+
                 const data = await res.json();
                 if (data.error) throw new Error(data.error.message);
-                return JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim());
+                
+                const responseText = data.choices[0].message.content;
+                // ทำความสะอาดตัวอักษร Markdown ก่อนแปลงเป็น JSON
+                return JSON.parse(responseText.replace(/```json|```/g, '').trim());
             };
 
             const handleAnalyze = async () => {
@@ -227,14 +245,13 @@
                     const reader = new FileReader();
                     const base64 = await new Promise(r => { reader.onload = () => r(reader.result.split(',')[1]); reader.readAsDataURL(image); });
                     
-                    // ปรับปรุง Prompt ให้เข้มงวดและเจาะจงมากขึ้น
                     const prompt = scanMode === 'label'
                         ? `Extract nutrition data from this nutrition label image. You MUST return ONLY a valid JSON object in this exact format, without any extra text or markdown: { "food_name": "Product Name (or 'ไม่ทราบชื่อ' if unreadable)", "calories": integer, "protein": integer, "carbs": integer, "fat": integer, "summary": "Short Thai summary. If data is unclear, guess based on common product types." }.`
                         : `Analyze this food image. You MUST return ONLY a valid JSON object in this exact format, without any extra text or markdown: { "food_name": "Thai Food Name", "calories": integer (estimate carefully based on portion), "protein": integer, "carbs": integer, "fat": integer, "summary": "Short Thai description. Consider portion size." }. ${userHint ? `Additional Context: ${userHint}` : ''}`;
                         
-                    const parsed = await callGemini(prompt, image.type, base64);
+                    const parsed = await callAI(prompt, image.type, base64);
                     
-                    // ระบบป้องกันข้อมูลว่างเปล่า (Fallback)
+                    // Fallback กันแอปพังถ้า AI มองภาพไม่ออก
                     const finalResult = {
                         food_name: parsed.food_name || "อาหารไม่ทราบชื่อ",
                         calories: parsed.calories || 0,
@@ -256,7 +273,7 @@
                 if (!textLog.trim()) return;
                 setLoadingTextLog(true); setError(null);
                 try {
-                    const parsed = await callGemini(`Convert this text into nutrition data: "${textLog}". You MUST return ONLY a valid JSON object in this exact format: { "food_name": "String", "calories": integer, "protein": integer, "carbs": integer, "fat": integer, "summary": "Short Thai summary" }`);
+                    const parsed = await callAI(`Convert this text into nutrition data: "${textLog}". You MUST return ONLY a valid JSON object in this exact format: { "food_name": "String", "calories": integer, "protein": integer, "carbs": integer, "fat": integer, "summary": "Short Thai summary" }`);
                     
                     const finalResult = {
                         food_name: parsed.food_name || textLog,
@@ -288,14 +305,9 @@
             };
 
             const handleAddWater = async (amount) => {
-                try {
-                    const { getFirestore, doc, setDoc } = window.FirebaseSDK;
-                    const newAmount = Math.max(0, waterIntake + amount);
-                    await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
-                } catch (err) {
-                    console.error("Add Water Error:", err);
-                    setError(`Water Sync Error: ${err.message || err}`);
-                }
+                const { getFirestore, doc, setDoc } = window.FirebaseSDK;
+                const newAmount = Math.max(0, waterIntake + amount);
+                await setDoc(doc(getFirestore(), 'artifacts', 'calorie-ai-pro-glass', 'users', user.uid, 'water', new Date().toLocaleDateString('en-CA')), { amount: newAmount }, { merge: true });
             };
 
             const handleSendMessage = async () => {
@@ -303,7 +315,7 @@
                 const newChat = [...chatMessages, { role: 'user', content: chatInput }];
                 setChatMessages(newChat); setChatInput(""); setIsChatting(true);
                 try {
-                    const parsed = await callGemini(`Nutrition coach context. History: ${JSON.stringify(newChat)}. Reply briefly in Thai. JSON: { "reply": "..." }`);
+                    const parsed = await callAI(`Nutrition coach context. History: ${JSON.stringify(newChat)}. You MUST return ONLY a valid JSON object in this exact format: { "reply": "Brief Thai reply" }`);
                     setChatMessages([...newChat, { role: 'model', content: parsed.reply }]);
                 } catch (err) { 
                     console.error("Chat Error:", err);
@@ -316,7 +328,7 @@
                 setLoadingInsights(true);
                 try {
                     const logStr = dailyLog.map(m => `${m.food_name}(${m.calories})`).join(', ');
-                    const parsed = await callGemini(`Analyze eating habits: ${logStr} (Target: ${profile?.tdee}). Return Thai JSON: { "insight": "...", "score": int }`);
+                    const parsed = await callAI(`Analyze eating habits: ${logStr} (Target: ${profile?.tdee}). You MUST return ONLY a valid JSON object in this exact format: { "insight": "Thai text", "score": integer }`);
                     setInsights(parsed);
                 } catch (err) { 
                     console.error("Insights Error:", err);

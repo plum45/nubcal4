@@ -204,7 +204,8 @@
                 const contents = [{ parts: [{ text: prompt }] }];
                 if (mimeType && base64Data) contents[0].parts.push({ inlineData: { mimeType, data: base64Data } });
                 
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                // เปลี่ยนโมเดลเป็น gemini-1.5-flash เพื่อให้รองรับกับ Public API Key ทุกประเภท
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
